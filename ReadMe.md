@@ -24,7 +24,7 @@ Secure role-based access
 - MVC + Repository pattern
 
 ## Database
-- PostgreSQL 15
+- PostgreSQL 16
 - Structured relational schema for Patients, Doctors, Reports
 - JSONB for medical report metadata
 

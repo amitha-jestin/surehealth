@@ -2,9 +2,13 @@ package com.sociolab.surehealth.model;
 
 import com.sociolab.surehealth.enums.CaseStatus;
 import jakarta.persistence.*;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name="cases")
 public class MedicalCase {
