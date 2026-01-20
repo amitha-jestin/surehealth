@@ -1,13 +1,16 @@
 package com.sociolab.surehealth.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sociolab.surehealth.enums.Role;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Getter
+@Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "users")
@@ -18,6 +21,7 @@ public class User {
 
     private String name;
     private String email;
+    @JsonIgnore
     private String password;
 
     @Enumerated(EnumType.STRING)

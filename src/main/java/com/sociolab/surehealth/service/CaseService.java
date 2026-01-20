@@ -1,5 +1,6 @@
 package com.sociolab.surehealth.service;
 
+import com.sociolab.surehealth.dto.CaseRequest;
 import com.sociolab.surehealth.enums.CaseStatus;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.User;
@@ -18,10 +19,12 @@ public class CaseService {
         this.userRepository = userRepository;
     }
 
-    public MedicalCase submitCase(Long patientId, MedicalCase medicalCase) {
+    public MedicalCase submitCase(Long patientId, CaseRequest caseReq) {
         User patient = userRepository.findById(patientId)
                 .orElseThrow(() -> new RuntimeException("Patient not found"));
-
+        MedicalCase medicalCase = new MedicalCase();
+        medicalCase.setTitle(caseReq.getTitle());
+        medicalCase.setDescription(caseReq.getDescription());
         medicalCase.setPatient(patient);
         medicalCase.setStatus(CaseStatus.SUBMITTED);
         return caseRepository.save(medicalCase);

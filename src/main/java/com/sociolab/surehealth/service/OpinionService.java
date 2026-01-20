@@ -1,5 +1,6 @@
 package com.sociolab.surehealth.service;
 
+import com.sociolab.surehealth.dto.OpinionRequest;
 import com.sociolab.surehealth.enums.CaseStatus;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.Opinion;
@@ -23,7 +24,7 @@ public class OpinionService {
         this.userRepository = userRepository;
     }
 
-    public Opinion submitOpinion(Long caseId, Long doctorId, String comment) {
+    public Opinion submitOpinion(Long caseId, Long doctorId, OpinionRequest opinionreq) {
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found"));
 
@@ -33,7 +34,7 @@ public class OpinionService {
         Opinion opinion = new Opinion();
         opinion.setMedicalCase(medicalCase);
         opinion.setDoctor(doctor);
-        opinion.setComment(comment);
+        opinion.setComment(opinionreq.getComment());
 
         medicalCase.setStatus(CaseStatus.REVIEWED);
         caseRepository.save(medicalCase);

@@ -1,7 +1,9 @@
 package com.sociolab.surehealth.controller;
 
+import com.sociolab.surehealth.dto.CaseRequest;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.service.CaseService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,10 +16,10 @@ public class CaseController {
     }
 
     @PostMapping("/{patientId}")
-    public MedicalCase submitCase(
+    public MedicalCase submitCase(@Valid
             @PathVariable Long patientId,
-            @RequestBody MedicalCase medicalCase) {
-        return caseService.submitCase(patientId, medicalCase);
+            @RequestBody CaseRequest caseReq) {
+        return caseService.submitCase(patientId, caseReq);
     }
 
 }

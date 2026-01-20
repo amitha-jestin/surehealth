@@ -1,6 +1,6 @@
 package com.sociolab.surehealth.controller;
 
-
+import com.sociolab.surehealth.dto.OpinionRequest;
 import com.sociolab.surehealth.model.Opinion;
 import com.sociolab.surehealth.service.OpinionService;
 import org.springframework.web.bind.annotation.*;
@@ -18,8 +18,8 @@ public class OpinionController {
     public Opinion submitOpinion(
             @PathVariable Long caseId,
             @PathVariable Long doctorId,
-            @RequestBody String comment) {
-        return opinionService.submitOpinion(caseId, doctorId, comment);
+            @RequestBody OpinionRequest opinionreq) {
+        return opinionService.submitOpinion(caseId, doctorId, opinionreq);
 
     }
     }
