@@ -3,6 +3,7 @@ package com.sociolab.surehealth.dto;
 import com.sociolab.surehealth.enums.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -22,6 +23,7 @@ public class UserRegisterRequest {
     private String email;
 
     @NotBlank(message = "Password is required")
+    @Size(min = 8)
     private String password;
 
 

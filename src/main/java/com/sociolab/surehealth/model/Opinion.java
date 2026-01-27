@@ -1,11 +1,13 @@
 package com.sociolab.surehealth.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+@Getter
 @Setter
 @NoArgsConstructor
 @Entity
@@ -15,11 +17,10 @@ public class Opinion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    private MedicalCase medicalCase;
 
-    @ManyToOne
-    private User doctor;
+    private Long caseId;
+    private Long doctorId;
+
 
     @Column(length = 5000)
     private String comment;

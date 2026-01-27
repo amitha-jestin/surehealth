@@ -1,88 +1,66 @@
 package com.sociolab.surehealth.security;
 
 import com.sociolab.surehealth.enums.Role;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.*;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.security.Key;
 import java.util.Date;
 
 @Component
 public class JwtUtil {
 
-    // Todo: Move secret to application properties or environment variable
     @Value("${jwt.secret}")
     private String secret;
+
+    @Value("${jwt.expiration.access}")
+    private long jwtExpirationMs;
 
     private SecretKey key;
 
     @PostConstruct
     public void init() {
+        if (secret == null || secret.length() < 32) {
+            throw new IllegalStateException(
+                    "JWT secret must be at least 32 characters"
+            );
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    @Value("${jwt.expiration.access}")
-    private long jwtExpirationMs;
 
-    Date expiration = new Date(System.currentTimeMillis() + jwtExpirationMs);
+    /* =====================================================
+       TOKEN CREATION
+       ===================================================== */
 
-    public String generateToken(String email, Role role) {
+    public String generateToken(Long id, String email, Role role) {
+
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + jwtExpirationMs);
+
         return Jwts.builder()
-                .setSubject(email)
+                .subject(email)
                 .claim("role", role.name())
-                .setIssuedAt(new Date())
-                .setExpiration(expiration)
-                .signWith(key)
+                .claim("id", id)
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
-    private Claims extractAllClaims(String token) {
+    /* =====================================================
+       TOKEN PARSING (throws JwtException)
+       ===================================================== */
+
+    public Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
-
-    public String extractEmail(String token) {
-        return extractAllClaims(token).getSubject();
-    }
-
-    public String extractRole(String token) {
-        return extractAllClaims(token).get("role", String.class);
-    }
-
-    public Date extractExpiration(String token) {
-        return extractAllClaims(token).getExpiration();
-    }
-
-    /* =====================================================
-       TOKEN VALIDATION
-       ===================================================== */
-
-    public boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
-    public boolean validateToken(String token, String email) {
-        return extractEmail(token).equals(email)
-                && !isTokenExpired(token);
-    }
-
-    public boolean isTokenValid(String token) {
-        try {
-            extractAllClaims(token);
-            return true;
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
-
 }

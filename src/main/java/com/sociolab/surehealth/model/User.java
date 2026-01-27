@@ -1,6 +1,7 @@
 package com.sociolab.surehealth.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.sociolab.surehealth.enums.AccountStatus;
 import com.sociolab.surehealth.enums.Role;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -26,6 +27,9 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     private Role role; // PATIENT / DOCTOR / ADMIN
+
+    @Enumerated(EnumType.STRING)
+    private AccountStatus status;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
