@@ -58,7 +58,10 @@ public class CaseService {
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Case not found"));
 
-        Doctor doctor = doctorRepository.findByEmail(doctorEmail)
+
+        User user = userRepository.findByEmail(doctorEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        Doctor doctor = doctorRepository.findById(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
         validateDoctorAction(medicalCase, doctor);
@@ -75,9 +78,11 @@ public class CaseService {
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Case not found"));
 
-        Doctor doctor = doctorRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
+        User user = userRepository.findByEmail(doctorEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        Doctor doctor = doctorRepository.findById(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
         validateDoctorAction(medicalCase, doctor);
 
         medicalCase.setStatus(CaseStatus.REJECTED);

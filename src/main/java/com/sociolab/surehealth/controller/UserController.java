@@ -5,11 +5,9 @@ import com.sociolab.surehealth.dto.UserRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterResponse;
 import com.sociolab.surehealth.model.Doctor;
 import com.sociolab.surehealth.model.User;
-import com.sociolab.surehealth.service.DoctorService;
 import com.sociolab.surehealth.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,17 +19,16 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping("/api/v1/users/register")
 @Validated
 @RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
-    private final DoctorService doctorService;
 
-    @PostMapping("/patient/register")
+    @PostMapping("/patient")
     public ResponseEntity<UserRegisterResponse> registerPatient(@Valid @RequestBody UserRegisterRequest request) {
-        User patient = userService.register(request);
+        User patient = userService.registerPatient(request);
 
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -51,9 +48,9 @@ public class UserController {
 
     }
 
-    @PostMapping("/doctor/register")
+    @PostMapping("/doctor")
     public ResponseEntity<UserRegisterResponse> registerDoctor(@Valid @RequestBody DoctorRegisterRequest request) {
-        Doctor doctor = doctorService.registerDoctor(request);
+        Doctor doctor = userService.registerDoctor(request);
 
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
