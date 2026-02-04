@@ -1,6 +1,7 @@
 package com.sociolab.surehealth.dto;
 
-public record ApiResponse(String status, String message) {
+
+public record ApiResponse(String status,String message) {
 
 
     public static ApiResponse success(String message) {

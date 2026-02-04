@@ -11,10 +11,8 @@ import lombok.Setter;
 @Getter
 @Setter
 @Table(
-        name = "Doctors",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "email"),
-                @UniqueConstraint(columnNames = "licenseNumber")
+        name = "doctors",
+        uniqueConstraints = {@UniqueConstraint(columnNames = "licenseNumber")
         }
 )
 

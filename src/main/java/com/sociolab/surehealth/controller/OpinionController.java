@@ -6,6 +6,7 @@ import com.sociolab.surehealth.service.OpinionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,7 +27,8 @@ public class OpinionController {
             @AuthenticationPrincipal String doctorEmail // from JWT
     ) {
         OpinionResponse response = opinionService.submitOpinion(caseId, doctorEmail, opinionRequest);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
     }
 }
-

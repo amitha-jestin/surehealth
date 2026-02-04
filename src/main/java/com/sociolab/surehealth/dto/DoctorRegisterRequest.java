@@ -5,15 +5,16 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.awt.*;
-
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 public class DoctorRegisterRequest {
 
     @NotBlank
@@ -26,7 +27,7 @@ public class DoctorRegisterRequest {
     @Size(min = 8)
     private String password;
 
-    @NotBlank
+    @NotNull
     private Speciality speciality;
 
     @NotBlank

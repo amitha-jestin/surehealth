@@ -5,6 +5,7 @@ import com.sociolab.surehealth.enums.Urgency;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -12,6 +13,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 public class CaseRequest {
     @NotBlank
     @Size(max = 150)
@@ -25,8 +27,8 @@ public class CaseRequest {
     @NotNull
     private Urgency urgency;
 
-    @NotBlank
-    private long doctorId;
+    @NotNull
+    private Long doctorId;
 
 
 

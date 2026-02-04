@@ -29,6 +29,12 @@ public class AdminService {
         Doctor doctor = doctorRepository.findByUserId(doctorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
+        if(doctor.getUser().getStatus() == AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Doctor is already approved");
+        }
+        if (doctor.getUser().getStatus() == AccountStatus.BLOCKED) {
+            throw new IllegalStateException("Blocked doctor cannot be approved");
+        }
         doctor.getUser().setStatus(AccountStatus.ACTIVE);
        // userRepository.save(doctor.getUser());
     }
@@ -37,6 +43,9 @@ public class AdminService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        if (user.getStatus() == AccountStatus.BLOCKED) {
+            throw new IllegalStateException("User is already blocked");
+        }
         user.setStatus(AccountStatus.BLOCKED);
         //userRepository.save(user);
     }
@@ -45,7 +54,9 @@ public class AdminService {
     public void unblockUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
+        if(user.getStatus() != AccountStatus.BLOCKED && user.getStatus() == AccountStatus.ACTIVE) {
+            throw new IllegalStateException("User is already Active");
+        }
         user.setStatus(AccountStatus.ACTIVE);
     }
 
@@ -66,7 +77,7 @@ public class AdminService {
         PageRequest pageable = PageRequest.of(
                 page,
                 size,
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+                Sort.by(Sort.Direction.DESC, "user.createdAt"));
 
         return doctorRepository.findAll(pageable)
                 .map(this::mapToDoctorResponse);
