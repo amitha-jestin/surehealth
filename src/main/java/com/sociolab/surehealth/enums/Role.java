@@ -6,6 +6,7 @@ import java.util.Arrays;
 
 public enum Role {
 PATIENT,
+    PENDING_DOCTOR, // for doctors awaiting admin approval
 DOCTOR,
 ADMIN
   /*  @JsonCreator

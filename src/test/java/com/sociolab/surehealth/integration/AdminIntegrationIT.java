@@ -43,7 +43,7 @@ class AdminIntegrationIT extends TestContainersConfig {
         patient = testDataFactory.createPatient("patientpass");
 
     }
-    
+
     @Test
     void approveDoctor_realIntegration() throws Exception {
 

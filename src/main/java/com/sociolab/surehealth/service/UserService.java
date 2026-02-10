@@ -49,7 +49,7 @@ public class UserService {
         User user = new User();
         user.setName(req.getName());
         user.setEmail(req.getEmail());
-        user.setRole(Role.DOCTOR); // default
+        user.setRole(Role.PENDING_DOCTOR); // default
         user.setStatus(AccountStatus.PENDING); // default
         user.setPassword(passwordEncoder.encode(req.getPassword()));
 

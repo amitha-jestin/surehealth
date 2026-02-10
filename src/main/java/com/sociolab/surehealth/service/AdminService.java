@@ -35,6 +35,7 @@ public class AdminService {
         if (doctor.getUser().getStatus() == AccountStatus.BLOCKED) {
             throw new IllegalStateException("Blocked doctor cannot be approved");
         }
+        doctor.getUser().setRole(Role.DOCTOR);
         doctor.getUser().setStatus(AccountStatus.ACTIVE);
        // userRepository.save(doctor.getUser());
     }
