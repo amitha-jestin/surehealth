@@ -33,4 +33,7 @@ public class User {
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    private int failedLoginAttempts = 0;
+    private LocalDateTime lockTime;
+
 }

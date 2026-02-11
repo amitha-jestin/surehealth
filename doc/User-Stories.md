@@ -117,7 +117,7 @@ attempts so that the system is protected from brute-force attacks.
 
 -   System tracks failed login attempts
 -   User account is locked after N failed attempts
--   Admin can manually unlock the account
+-   Admin can manually unblock the account
 
 ## US-9: Medical Document Upload
 **As a user**, I want to upload medical documents (PDF, images) so that specialists can review them.
