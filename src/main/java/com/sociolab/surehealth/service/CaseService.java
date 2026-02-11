@@ -4,6 +4,7 @@ import com.sociolab.surehealth.dto.CaseRequest;
 import com.sociolab.surehealth.dto.CaseResponse;
 import com.sociolab.surehealth.enums.AccountStatus;
 import com.sociolab.surehealth.enums.CaseStatus;
+import com.sociolab.surehealth.enums.Role;
 import com.sociolab.surehealth.exception.ResourceNotFoundException;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.User;
@@ -17,6 +18,9 @@ import com.sociolab.surehealth.model.Doctor;
 
 
 import java.time.LocalDateTime;
+import java.util.List;
+
+import static java.util.Arrays.stream;
 
 @Service
 @RequiredArgsConstructor
@@ -119,6 +123,30 @@ public class CaseService {
             throw new IllegalStateException("Doctor account is not active");
         }
     }
+
+
+    public List<CaseResponse> getMyCases(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (user.getRole() != Role.DOCTOR && user.getRole() != com.sociolab.surehealth.enums.Role.PATIENT) {
+            throw new IllegalStateException("Only doctors and patients can have cases");
+        }
+
+        List<MedicalCase> cases = switch (user.getRole()) {
+            case DOCTOR -> caseRepository.findByDoctorId(user.getId());
+            case PATIENT -> caseRepository.findByPatientId(user.getId());
+            default -> throw new IllegalStateException("Invalid user role");
+        };
+
+        return cases.stream()
+                .map(this::mapToResponse)
+                .toList();
+
+
+
+    }
+
 
 
 }

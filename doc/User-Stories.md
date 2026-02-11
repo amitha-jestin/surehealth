@@ -57,7 +57,7 @@ specialist can review it.
 
 ## US-4: View Submitted Cases
 
-**As a user**, I want to view my submitted cases so that I can track
+**As a user or a specialist **, I want to view my submitted cases/ cases assigned to me so that I can track
 their status.
 
 ### Acceptance Criteria:

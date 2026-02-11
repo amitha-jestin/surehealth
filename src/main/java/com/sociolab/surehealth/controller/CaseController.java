@@ -11,6 +11,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
 
+import java.util.List;
+
 
 @RestController
 @RequestMapping("/api/v1/cases")
@@ -53,6 +55,14 @@ public class CaseController {
         return ResponseEntity.ok(
                 caseService.rejectCase(caseId, email)
         );
+    }
+
+
+    @GetMapping("/my")
+    @PreAuthorize("hasRole('PATIENT') or hasRole('DOCTOR')")
+    public ResponseEntity<List<CaseResponse>> getMyCases(Authentication authentication) {
+        String email = authentication.getName();
+        return ResponseEntity.ok(caseService.getMyCases(email));
     }
 }
 
