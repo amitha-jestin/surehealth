@@ -104,10 +104,6 @@ remains secure and organized.
 -   Admin can assign roles (USER, SPECIALIST, ADMIN)
 -   Role-based access control is enforced in APIs
 
-------------------------------------------------------------------------
-
-# Future Backlog (Planned Features)
-
 ## US-8: Account Lockout
 
 **As an admin**, I want to block users after multiple failed login
@@ -118,6 +114,9 @@ attempts so that the system is protected from brute-force attacks.
 -   System tracks failed login attempts
 -   User account is locked after N failed attempts
 -   Admin can manually unblock the account
+------------------------------------------------------------------------
+
+# Future Backlog (Planned Features)
 
 ## US-9: Medical Document Upload
 **As a user**, I want to upload medical documents (PDF, images) so that specialists can review them.
@@ -139,6 +138,14 @@ attempts so that the system is protected from brute-force attacks.
 -   Notifications can be email or in-app
 
 -   Notification history is stored
+
+## US-11: Account logout
+**As a user**, I want to log out of my account so that I can ensure my session is secure.
+### Acceptance Criteria:
+-   User can log out successfully
+-   JWT token is invalidated upon logout
+- User receives confirmation after logout
+
 
 
 ------------------------------------------------------------------------

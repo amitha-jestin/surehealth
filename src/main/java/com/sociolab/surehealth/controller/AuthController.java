@@ -63,5 +63,5 @@ public class AuthController {
         return ResponseEntity.ok(new LoginResponse(token, user.getId(),user.getEmail(), user.getRole().name()));
     }
 
-    
+
 }

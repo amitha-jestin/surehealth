@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -29,7 +31,9 @@ public class MedicalCase {
     @Enumerated(EnumType.STRING)
     private Urgency urgency;
 
-    private String filePath; // where report/photo is stored
+    @OneToMany(mappedBy = "medicalCase", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<MedicalDocument> documents = new ArrayList<>();
+
 
     @Enumerated(EnumType.STRING)
     private CaseStatus status; // SUBMITTED / REVIEWED
