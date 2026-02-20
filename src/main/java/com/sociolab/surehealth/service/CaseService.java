@@ -1,9 +1,11 @@
 package com.sociolab.surehealth.service;
 
+import com.sociolab.surehealth.dto.CaseNotificationEvent;
 import com.sociolab.surehealth.dto.CaseRequest;
 import com.sociolab.surehealth.dto.CaseResponse;
 import com.sociolab.surehealth.enums.AccountStatus;
 import com.sociolab.surehealth.enums.CaseStatus;
+import com.sociolab.surehealth.enums.NotificationEventType;
 import com.sociolab.surehealth.enums.Role;
 import com.sociolab.surehealth.exception.ResourceNotFoundException;
 import com.sociolab.surehealth.model.MedicalCase;
@@ -29,6 +31,8 @@ public class CaseService {
     private final MedicalCaseRepository caseRepository;
     private final UserRepository userRepository;
     private final DoctorRepository doctorRepository;
+    private final KafkaNotificationProducer kafkaProducer;
+
 
 
 
@@ -57,6 +61,15 @@ public class CaseService {
 
         MedicalCase case1 = caseRepository.save(medicalCase);
 
+            // ✅ notify doctor
+        kafkaProducer.sendEvent(
+                new CaseNotificationEvent(
+                        doctor.getUser().getId(),
+                        "New case assigned: " + req.getTitle(),
+                        NotificationEventType.CASE_ASSIGNED
+                )
+        );
+
         return mapToResponse(case1);
     }
     @Transactional
@@ -74,6 +87,13 @@ public class CaseService {
 
 
         medicalCase.setStatus(CaseStatus.ACCEPTED);
+// ✅ notify patient
+        kafkaProducer.sendEvent(
+                new CaseNotificationEvent(
+                        medicalCase.getPatientId(),
+                        "Doctor accepted your case",
+                        NotificationEventType.CASE_ACCEPTED
+                ));
 
 
 
@@ -92,6 +112,16 @@ public class CaseService {
         validateDoctorAction(medicalCase, doctor);
 
         medicalCase.setStatus(CaseStatus.REJECTED);
+
+        // ✅ notify patient
+        kafkaProducer.sendEvent(
+                new CaseNotificationEvent(
+                        medicalCase.getPatientId(),
+                        "Doctor rejected your case",
+                        NotificationEventType.CASE_REJECTED
+                )
+        );
+
         return mapToResponse(medicalCase);
     }
 

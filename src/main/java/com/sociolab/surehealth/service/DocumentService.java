@@ -8,6 +8,7 @@ import com.sociolab.surehealth.model.User;
 import com.sociolab.surehealth.repository.DocumentRepository;
 import com.sociolab.surehealth.repository.MedicalCaseRepository;
 import com.sociolab.surehealth.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
@@ -32,7 +33,7 @@ public class DocumentService {
 
     @Value("${file.upload-dir}")
     private String uploadDir;
-
+    @Transactional
     public List<DocumentResponse> uploadDocument(Long caseId, String email, List<MultipartFile> files) {
         MedicalCase medicalCase = caseRepository.findCaseById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found"));

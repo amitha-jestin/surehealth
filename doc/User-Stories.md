@@ -114,9 +114,6 @@ attempts so that the system is protected from brute-force attacks.
 -   System tracks failed login attempts
 -   User account is locked after N failed attempts
 -   Admin can manually unblock the account
-------------------------------------------------------------------------
-
-# Future Backlog (Planned Features)
 
 ## US-9: Medical Document Upload
 **As a user**, I want to upload medical documents (PDF, images) so that specialists can review them.
@@ -126,7 +123,11 @@ attempts so that the system is protected from brute-force attacks.
 -   User can upload multiple files per case
 -   Files are stored securely and linked to the case
 -   Specialists can view the uploaded documents
-- 
+
+------------------------------------------------------------------------
+
+# Future Backlog (Planned Features)
+
 ## US-10: Case Notifications
 
 **As a user and doctor**, I want to receive notifications for case assignment, acceptance, rejection, and review so that I stay informed.
@@ -135,7 +136,7 @@ attempts so that the system is protected from brute-force attacks.
 
 -   Notifications triggered for assignment, accept, reject, and review
 
--   Notifications can be email or in-app
+-   Notifications can be in-app
 
 -   Notification history is stored
 
