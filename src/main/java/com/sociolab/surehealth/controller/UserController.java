@@ -1,19 +1,18 @@
 package com.sociolab.surehealth.controller;
 
+import com.sociolab.surehealth.dto.ApiResponse;
 import com.sociolab.surehealth.dto.DoctorRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterResponse;
 import com.sociolab.surehealth.model.Doctor;
 import com.sociolab.surehealth.model.User;
 import com.sociolab.surehealth.service.UserService;
+import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
@@ -26,12 +25,16 @@ public class UserController {
 
     private final UserService userService;
 
+    // ================= REGISTER PATIENT =================
     @PostMapping("/patient")
-    public ResponseEntity<UserRegisterResponse> registerPatient(@Valid @RequestBody UserRegisterRequest request) {
+    public ResponseEntity<ApiResponse<UserRegisterResponse>> registerPatient(
+            @Valid @RequestBody UserRegisterRequest request
+    ) {
+
         User patient = userService.registerPatient(request);
 
-
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+        URI location = ServletUriComponentsBuilder
+                .fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(patient.getId())
                 .toUri();
@@ -44,31 +47,35 @@ public class UserController {
                 "Patient registered successfully"
         );
 
-        return ResponseEntity.created(location).body(response);
-
+        return ResponseEntity
+                .created(location)
+                .body(ResponseUtil.success(response));
     }
 
+    // ================= REGISTER DOCTOR =================
     @PostMapping("/doctor")
-    public ResponseEntity<UserRegisterResponse> registerDoctor(@Valid @RequestBody DoctorRegisterRequest request) {
+    public ResponseEntity<ApiResponse<UserRegisterResponse>> registerDoctor(
+            @Valid @RequestBody DoctorRegisterRequest request
+    ) {
+
         Doctor doctor = userService.registerDoctor(request);
 
-
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+        URI location = ServletUriComponentsBuilder
+                .fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(doctor.getUser().getId())
                 .toUri();
-
 
         UserRegisterResponse response = new UserRegisterResponse(
                 doctor.getUser().getId(),
                 doctor.getUser().getName(),
                 doctor.getUser().getEmail(),
                 doctor.getUser().getRole().name(),
-                "Doctor registered successfully. Awaiting admin approval");
+                "Doctor registered successfully. Awaiting admin approval"
+        );
 
-        return ResponseEntity.created(location).body(response);
-
-
+        return ResponseEntity
+                .created(location)
+                .body(ResponseUtil.success(response));
     }
-
 }

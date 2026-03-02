@@ -1,83 +1,83 @@
 package com.sociolab.surehealth.exception;
 
-import com.sociolab.surehealth.dto.ErrorResponse;
-import io.jsonwebtoken.JwtException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
+import com.sociolab.surehealth.enums.ErrorType;
+import com.sociolab.surehealth.exception.custom.AppException;
+import com.sociolab.surehealth.exception.utils.ProblemDetailFactory;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
+
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
-    // Validation errors (@NotBlank, @Email, @Valid, etc.)
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+    private final ProblemDetailFactory problemDetailFactory;
 
-        String message = ex.getBindingResult()
+    // ===== Custom business exception =====
+    @ExceptionHandler(AppException.class)
+    public ProblemDetail handleAppException(AppException ex, HttpServletRequest request) {
+
+        return problemDetailFactory.fromAppException(ex, request.getRequestURI());
+    }
+
+    // ===== Validation error =====
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
+        // Collect all validation errors
+        List<String> errors = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
-                .map(e -> e.getField() + ": " + e.getDefaultMessage())
-                .collect(Collectors.joining(", "));
+                .map(err -> err.getField() + " " + err.getDefaultMessage())
+                .collect(Collectors.toList());
 
-        return ResponseEntity.badRequest()
-                .body(new ErrorResponse(
-                        "VALIDATION_ERROR",
-                        message
-                ));
+        String message = errors.isEmpty() ? "Validation failed" : String.join("; ", errors);
+
+        return ProblemDetailFactory.builder()
+                .errorType(ErrorType.VALIDATION_ERROR)
+                .title(ErrorType.VALIDATION_ERROR.name())
+                .detail(message)
+                .path(request.getRequestURI())
+                .baseUri(problemDetailFactory.getBaseUri())
+                .apiVersion(problemDetailFactory.getApiVersion())
+                .clock(problemDetailFactory.getClock())
+                .build();
     }
 
-    // Role not permitted
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDenied() {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ErrorResponse(
-                        "ROLE_FORBIDDEN",
-                        "You do not have permission to access this resource"
-                ));
+    // ===== Constraint violation =====
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ProblemDetail handleConstraint(ConstraintViolationException ex, HttpServletRequest request) {
+        return ProblemDetailFactory.builder()
+                .errorType(ErrorType.VALIDATION_ERROR)
+                .title(ErrorType.VALIDATION_ERROR.name())
+                .detail(ex.getMessage())
+                .path(request.getRequestURI())
+                .baseUri(problemDetailFactory.getBaseUri())
+                .apiVersion(problemDetailFactory.getApiVersion())
+                .clock(problemDetailFactory.getClock())
+                .build();
     }
 
-    // Resource not found
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "RESOURCE_NOT_FOUND",
-                        ex.getMessage()
-                ));
-    }
-
-    // Duplicate email / resource
-    @ExceptionHandler(DuplicateResourceException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicate(DuplicateResourceException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(
-                        "DUPLICATE_EMAIL",
-                        ex.getMessage()
-                ));
-    }
-
-    // Invalid login credentials
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidCredentials() {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ErrorResponse(
-                        "INVALID_CREDENTIALS",
-                        "Invalid email or password"
-                ));
-    }
-
-    // Fallback (unexpected errors)
+    // ===== Fallback / Internal Server Error =====
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse(
-                        "INTERNAL_ERROR",
-                        "Something went wrong. Please try again later."
-                ));
+    public ProblemDetail handleGeneric(Exception ex, HttpServletRequest request) {
+
+        return ProblemDetailFactory.builder()
+                .errorType(ErrorType.INTERNAL_SERVER_ERROR)
+                .title(ErrorType.INTERNAL_SERVER_ERROR.name())
+                .detail(ex.getMessage() != null ? ex.getMessage() : "Unexpected internal error")
+                .path(request.getRequestURI())
+                .baseUri(problemDetailFactory.getBaseUri())
+                .apiVersion(problemDetailFactory.getApiVersion())
+                .clock(problemDetailFactory.getClock())
+                .build();
     }
 }

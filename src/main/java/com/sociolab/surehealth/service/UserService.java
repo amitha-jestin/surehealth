@@ -3,8 +3,9 @@ package com.sociolab.surehealth.service;
 import com.sociolab.surehealth.dto.DoctorRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterRequest;
 import com.sociolab.surehealth.enums.AccountStatus;
+import com.sociolab.surehealth.enums.ErrorType;
 import com.sociolab.surehealth.enums.Role;
-import com.sociolab.surehealth.exception.DuplicateResourceException;
+import com.sociolab.surehealth.exception.custom.AppException;
 import com.sociolab.surehealth.model.Doctor;
 import com.sociolab.surehealth.model.User;
 import com.sociolab.surehealth.repository.DoctorRepository;
@@ -26,7 +27,8 @@ public class UserService {
     public User registerPatient(UserRegisterRequest req) {
 
         userRepository.findByEmail(req.getEmail())
-                .ifPresent(u -> { throw new DuplicateResourceException("Email already exists"); });
+                .ifPresent(u -> { throw new AppException(ErrorType.DUPLICATE_RESOURCE , "Email already exists");
+                });
 
         User user = new User();
         user.setName(req.getName());
@@ -41,10 +43,11 @@ public class UserService {
     public Doctor registerDoctor(DoctorRegisterRequest req) {
 
         userRepository.findByEmail(req.getEmail())
-                .ifPresent(u -> { throw new DuplicateResourceException("Email already exists"); });
+                .ifPresent(u -> { throw new AppException(ErrorType.DUPLICATE_RESOURCE, "Email already exists");
+                });
 
         if (doctorRepository.existsByLicenseNumber(req.getLicenseNumber())) {
-            throw new DuplicateResourceException("License already registered");
+            throw new AppException(ErrorType.DUPLICATE_RESOURCE, "License number already exists");
         }
         User user = new User();
         user.setName(req.getName());
@@ -69,7 +72,7 @@ public class UserService {
 
     public User getUser(Long id) {
         return userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,"User not found"));
     }
 
 

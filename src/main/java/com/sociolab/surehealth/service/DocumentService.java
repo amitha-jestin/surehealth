@@ -1,7 +1,8 @@
 package com.sociolab.surehealth.service;
 
-import com.sociolab.surehealth.dto.CaseResponse;
 import com.sociolab.surehealth.dto.DocumentResponse;
+import com.sociolab.surehealth.enums.ErrorType;
+import com.sociolab.surehealth.exception.custom.AppException;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.MedicalDocument;
 import com.sociolab.surehealth.model.User;
@@ -11,7 +12,7 @@ import com.sociolab.surehealth.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -19,9 +20,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,69 +34,79 @@ public class DocumentService {
 
     @Value("${file.upload-dir}")
     private String uploadDir;
+
+    // ================= UPLOAD DOCUMENTS =================
     @Transactional
-    public List<DocumentResponse> uploadDocument(Long caseId, String email, List<MultipartFile> files) {
-        MedicalCase medicalCase = caseRepository.findCaseById(caseId)
-                .orElseThrow(() -> new RuntimeException("Case not found"));
+    public Page<DocumentResponse> uploadDocuments(Long caseId, String email, List<MultipartFile> files) {
+        MedicalCase medicalCase = caseRepository.findById(caseId)
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found"));
+
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found"));
 
-        if (!medicalCase.getPatientId().equals(user.getId())){
-            throw new AccessDeniedException("You are not allowed to upload documents for this case");
-
+        if (!medicalCase.getPatientId().equals(user.getId())) {
+            throw new AppException(ErrorType.ACCESS_DENIED, "You are not allowed to upload documents for this case");
         }
 
-        List<DocumentResponse> responses = new ArrayList<>();
+        List<MedicalDocument> savedDocs = files.stream()
+                .map(file -> saveFile(file, medicalCase))
+                .collect(Collectors.toList());
 
-        for (MultipartFile file : files) {
-
-            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-            Path filePath = Paths.get( uploadDir + fileName);
-
-            try {
-                Files.createDirectories(filePath.getParent());
-                Files.write(filePath, file.getBytes());
-            } catch (IOException e) {
-                throw new RuntimeException("File upload failed", e);
-            }
-
-            MedicalDocument doc = new MedicalDocument();
-            doc.setFileName(file.getOriginalFilename());
-            doc.setFileType(file.getContentType());
-            doc.setFilePath(filePath.toString());
-            doc.setMedicalCase(medicalCase);
-
-            documentRepository.save(doc);
-
-            responses.add(mapToResponse(doc));
-        }
-
-        return responses;
-
+        Pageable pageable = PageRequest.of(0, savedDocs.size()); // single page
+        return new PageImpl<>(savedDocs.stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList()), pageable, savedDocs.size());
     }
 
+    // ================= GET DOCUMENTS FOR CASE (PAGED) =================
+    public Page<DocumentResponse> getDocumentsForCase(Long caseId, String email, int page, int size) {
+        MedicalCase medicalCase = caseRepository.findById(caseId)
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found"));
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found"));
+
+        if (!medicalCase.getPatientId().equals(user.getId()) &&
+                !medicalCase.getDoctorId().equals(user.getId())) {
+            throw new AppException(ErrorType.ACCESS_DENIED, "You are not allowed to view documents for this case");
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("uploadedAt").descending());
+        Page<MedicalDocument> documentsPage = documentRepository.findByMedicalCaseId(caseId, pageable);
+
+        return documentsPage.map(this::mapToResponse);
+    }
+
+    // ================= HELPER: SAVE SINGLE FILE =================
+    private MedicalDocument saveFile(MultipartFile file, MedicalCase medicalCase) {
+        String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+        Path filePath = Paths.get(uploadDir, fileName);
+
+        try {
+            Files.createDirectories(filePath.getParent());
+            Files.write(filePath, file.getBytes());
+        } catch (IOException e) {
+            throw new AppException(ErrorType.DOCUMENT_UPLOAD_FAILED, e.getMessage());
+        }
+
+        MedicalDocument doc = new MedicalDocument();
+        doc.setFileName(file.getOriginalFilename());
+        doc.setFileType(file.getContentType());
+        doc.setFilePath(filePath.toString());
+        doc.setMedicalCase(medicalCase);
+
+        return documentRepository.save(doc);
+    }
+
+    // ================= HELPER: MAP TO RESPONSE =================
     private DocumentResponse mapToResponse(MedicalDocument doc) {
-        DocumentResponse res = new DocumentResponse(doc.getId(), doc.getFileName(), doc.getFileType(), doc.getFilePath(),doc.getMedicalCase().getId(),doc.getUploadedAt());
-        return res;
-    }
-
-
-    public List<DocumentResponse> getDocumentsForCase(Long caseId, String email) {
-        MedicalCase medicalCase = caseRepository.findCaseById(caseId)
-                .orElseThrow(() -> new RuntimeException("Case not found"));
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (!medicalCase.getPatientId().equals(user.getId()) && !medicalCase.getDoctorId().equals(user.getId())){
-            throw new AccessDeniedException("You are not allowed to view documents for this case");
-
-        }
-
-        List<MedicalDocument> documents = documentRepository.findByMedicalCaseId(caseId);
-        List<DocumentResponse> responses = new ArrayList<>();
-        for (MedicalDocument doc : documents) {
-            responses.add(mapToResponse(doc));
-        }
-        return responses;
+        return new DocumentResponse(
+                doc.getId(),
+                doc.getFileName(),
+                doc.getFileType(),
+                doc.getFilePath(),
+                doc.getMedicalCase().getId(),
+                doc.getUploadedAt()
+        );
     }
 }

@@ -3,7 +3,8 @@ package com.sociolab.surehealth.service;
 import com.sociolab.surehealth.dto.OpinionRequest;
 import com.sociolab.surehealth.dto.OpinionResponse;
 import com.sociolab.surehealth.enums.CaseStatus;
-import com.sociolab.surehealth.exception.ResourceNotFoundException;
+import com.sociolab.surehealth.enums.ErrorType;
+import com.sociolab.surehealth.exception.custom.AppException;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.Opinion;
 import com.sociolab.surehealth.model.User;
@@ -27,22 +28,20 @@ public class OpinionService {
     public OpinionResponse submitOpinion(Long caseId, String doctorEmail, OpinionRequest request) {
         // 1. Fetch case
         MedicalCase medicalCase = caseRepository.findById(caseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Medical case not found"));
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Medical case not found"));
 
         // 2. Ensure case is in ACCEPTED status
         if (medicalCase.getStatus() != CaseStatus.ACCEPTED) {
-            throw new IllegalStateException(
-                    "Doctor cannot submit opinion: Case is not accepted for review");
+            throw new AppException(ErrorType.INVALID_OPERATION, "Opinions can only be submitted for cases in ACCEPTED status");
         }
 
         // 3. Fetch doctor
         User doctor = userRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Doctor not found"));
 
         // 4. Optional: Verify doctor is assigned to the case (if workflow requires)
         if (!doctor.getId().equals(medicalCase.getDoctorId())) {
-            throw new IllegalStateException(
-                    "Doctor is not assigned to this case");
+            throw new AppException(ErrorType.INVALID_OPERATION, "You are not assigned to review this case");
         }
 
         // 5. Create opinion entity

@@ -3,11 +3,9 @@ package com.sociolab.surehealth.service;
 import com.sociolab.surehealth.dto.CaseNotificationEvent;
 import com.sociolab.surehealth.dto.CaseRequest;
 import com.sociolab.surehealth.dto.CaseResponse;
-import com.sociolab.surehealth.enums.AccountStatus;
-import com.sociolab.surehealth.enums.CaseStatus;
-import com.sociolab.surehealth.enums.NotificationEventType;
-import com.sociolab.surehealth.enums.Role;
-import com.sociolab.surehealth.exception.ResourceNotFoundException;
+import com.sociolab.surehealth.enums.*;
+import com.sociolab.surehealth.exception.custom.AppException;
+import com.sociolab.surehealth.model.Doctor;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.User;
 import com.sociolab.surehealth.repository.DoctorRepository;
@@ -15,14 +13,13 @@ import com.sociolab.surehealth.repository.MedicalCaseRepository;
 import com.sociolab.surehealth.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import com.sociolab.surehealth.model.Doctor;
-
 
 import java.time.LocalDateTime;
-import java.util.List;
-
-import static java.util.Arrays.stream;
 
 @Service
 @RequiredArgsConstructor
@@ -33,98 +30,130 @@ public class CaseService {
     private final DoctorRepository doctorRepository;
     private final KafkaNotificationProducer kafkaProducer;
 
-
-
-
-
-    public CaseResponse submitCase(String patientEmail, CaseRequest req) {
-
+    // ================= SUBMIT CASE =================
+    @Transactional
+    public CaseResponse submitCase(String patientEmail, CaseRequest request) {
         User patient = userRepository.findByEmail(patientEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,
+                        "Patient with email '" + patientEmail + "' not found"));
 
-        Doctor doctor = doctorRepository.findByUserId(req.getDoctorId())
-                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
+        Doctor doctor = doctorRepository.findByUserId(request.getDoctorId())
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,
+                        "Doctor with ID '" + request.getDoctorId() + "' not found"));
 
-        if (doctor.getUser().getStatus() != AccountStatus.ACTIVE) {
-            throw new ResourceNotFoundException("Doctor not available");
-        }
+        validateDoctorStatus(doctor);
 
         MedicalCase medicalCase = new MedicalCase();
-        medicalCase.setTitle(req.getTitle());
-        medicalCase.setDescription(req.getDescription());
-        medicalCase.setSpeciality(req.getSpeciality());
-        medicalCase.setUrgency(req.getUrgency());
+        medicalCase.setTitle(request.getTitle());
+        medicalCase.setDescription(request.getDescription());
+        medicalCase.setSpeciality(request.getSpeciality());
+        medicalCase.setUrgency(request.getUrgency());
         medicalCase.setPatientId(patient.getId());
-        medicalCase.setDoctorId(req.getDoctorId());
+        medicalCase.setDoctorId(doctor.getUser().getId());
         medicalCase.setStatus(CaseStatus.ASSIGNED);
         medicalCase.setCreatedAt(LocalDateTime.now());
 
-        MedicalCase case1 = caseRepository.save(medicalCase);
+        MedicalCase savedCase = caseRepository.save(medicalCase);
 
-            // ✅ notify doctor
-        kafkaProducer.sendEvent(
-                new CaseNotificationEvent(
-                        doctor.getUser().getId(),
-                        "New case assigned: " + req.getTitle(),
-                        NotificationEventType.CASE_ASSIGNED
-                )
-        );
+        // Kafka notification
+        kafkaProducer.sendEvent(new CaseNotificationEvent(
+                doctor.getUser().getId(),
+                "New case assigned: " + request.getTitle(),
+                NotificationEventType.CASE_ASSIGNED
+        ));
 
-        return mapToResponse(case1);
+        return mapToResponse(savedCase);
     }
+
+    // ================= ACCEPT CASE =================
     @Transactional
     public CaseResponse acceptCase(Long caseId, String doctorEmail) {
-        MedicalCase medicalCase = caseRepository.findById(caseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Case not found"));
-
-
-        User user = userRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        Doctor doctor = doctorRepository.findById(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
-
-        validateDoctorAction(medicalCase, doctor);
-
-
+        MedicalCase medicalCase = getCaseForDoctorAction(caseId, doctorEmail);
         medicalCase.setStatus(CaseStatus.ACCEPTED);
-// ✅ notify patient
-        kafkaProducer.sendEvent(
-                new CaseNotificationEvent(
-                        medicalCase.getPatientId(),
-                        "Doctor accepted your case",
-                        NotificationEventType.CASE_ACCEPTED
-                ));
 
-
+        kafkaProducer.sendEvent(new CaseNotificationEvent(
+                medicalCase.getPatientId(),
+                "Doctor accepted your case",
+                NotificationEventType.CASE_ACCEPTED
+        ));
 
         return mapToResponse(medicalCase);
     }
+
+    // ================= REJECT CASE =================
     @Transactional
     public CaseResponse rejectCase(Long caseId, String doctorEmail) {
-        MedicalCase medicalCase = caseRepository.findById(caseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Case not found"));
-
-        User user = userRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        Doctor doctor = doctorRepository.findById(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
-        validateDoctorAction(medicalCase, doctor);
-
+        MedicalCase medicalCase = getCaseForDoctorAction(caseId, doctorEmail);
         medicalCase.setStatus(CaseStatus.REJECTED);
 
-        // ✅ notify patient
-        kafkaProducer.sendEvent(
-                new CaseNotificationEvent(
-                        medicalCase.getPatientId(),
-                        "Doctor rejected your case",
-                        NotificationEventType.CASE_REJECTED
-                )
-        );
+        kafkaProducer.sendEvent(new CaseNotificationEvent(
+                medicalCase.getPatientId(),
+                "Doctor rejected your case",
+                NotificationEventType.CASE_REJECTED
+        ));
 
         return mapToResponse(medicalCase);
     }
 
+    // ================= GET MY CASES (SPRING PAGE) =================
+    public Page<CaseResponse> getMyCases(String email, int page, int size) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,
+                        "User with email '" + email + "' not found"));
+
+        if (user.getRole() != Role.DOCTOR && user.getRole() != Role.PATIENT) {
+            throw new AppException(ErrorType.ACCESS_DENIED,
+                    "Only doctors and patients can access their cases");
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        Page<MedicalCase> casesPage = switch (user.getRole()) {
+            case DOCTOR -> caseRepository.findByDoctorId(user.getId(), pageable);
+            case PATIENT -> caseRepository.findByPatientId(user.getId(), pageable);
+            default -> throw new AppException(ErrorType.ACCESS_DENIED,
+                    "Role not allowed to access cases");
+        };
+
+        // Map MedicalCase -> CaseResponse
+        return casesPage.map(this::mapToResponse);
+    }
+
+    // ================= HELPER METHODS =================
+    private MedicalCase getCaseForDoctorAction(Long caseId, String doctorEmail) {
+        MedicalCase medicalCase = caseRepository.findById(caseId)
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,
+                        "Case with ID '" + caseId + "' not found"));
+
+        User user = userRepository.findByEmail(doctorEmail)
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,
+                        "User with email '" + doctorEmail + "' not found"));
+
+        Doctor doctor = doctorRepository.findById(user.getId())
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,
+                        "Doctor not found"));
+
+        validateDoctorStatus(doctor);
+
+        if (!medicalCase.getDoctorId().equals(doctor.getUser().getId())) {
+            throw new AppException(ErrorType.ACCESS_DENIED,
+                    "You are not assigned to this case");
+        }
+
+        if (medicalCase.getStatus() != CaseStatus.ASSIGNED) {
+            throw new AppException(ErrorType.INVALID_OPERATION,
+                    "Case already processed or not available for action");
+        }
+
+        return medicalCase;
+    }
+
+    private void validateDoctorStatus(Doctor doctor) {
+        if (doctor.getUser().getStatus() != AccountStatus.ACTIVE) {
+            throw new AppException(ErrorType.USER_INVALID_STATUS,
+                    "Doctor account is not active");
+        }
+    }
 
     private CaseResponse mapToResponse(MedicalCase c) {
         return new CaseResponse(
@@ -138,47 +167,4 @@ public class CaseService {
                 c.getDoctorId()
         );
     }
-
-    private void validateDoctorAction(
-            MedicalCase medicalCase,
-            Doctor doctor
-    ) {
-        if (!medicalCase.getDoctorId().equals(doctor.getUser().getId())) {
-            throw new IllegalStateException("You are not authorized to act on this case");
-        }
-
-        if (medicalCase.getStatus() != CaseStatus.ASSIGNED) {
-            throw new IllegalStateException("Case already processed");
-        }
-
-        if (doctor.getUser().getStatus() != AccountStatus.ACTIVE) {
-            throw new IllegalStateException("Doctor account is not active");
-        }
-    }
-
-
-    public List<CaseResponse> getMyCases(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (user.getRole() != Role.DOCTOR && user.getRole() != com.sociolab.surehealth.enums.Role.PATIENT) {
-            throw new IllegalStateException("Only doctors and patients can have cases");
-        }
-
-        List<MedicalCase> cases = switch (user.getRole()) {
-            case DOCTOR -> caseRepository.findByDoctorId(user.getId());
-            case PATIENT -> caseRepository.findByPatientId(user.getId());
-            default -> throw new IllegalStateException("Invalid user role");
-        };
-
-        return cases.stream()
-                .map(this::mapToResponse)
-                .toList();
-
-
-
-    }
-
-
-
 }

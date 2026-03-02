@@ -126,8 +126,6 @@ attempts so that the system is protected from brute-force attacks.
 
 ------------------------------------------------------------------------
 
-# Future Backlog (Planned Features)
-
 ## US-10: Case Notifications
 
 **As a user and doctor**, I want to receive notifications for case assignment, acceptance, rejection, and review so that I stay informed.
@@ -151,8 +149,30 @@ attempts so that the system is protected from brute-force attacks.
 
 ------------------------------------------------------------------------
 📌 Section 2: Technical / Engineering User Stories (non-functional)
-# Epic 5: Observability & Documentation
-## EN-1: Logging & Monitoring
+
+# Epic 5: API Error Standardization
+
+## EN-1: Centralized ProblemDetail Error Handling
+
+**As a developer**, I want to implement centralized RFC 7807-compliant error handling so that all APIs return consistent and structured error responses.
+
+### Acceptance Criteria:
+
+    Introduce ErrorType enum with HTTP status mapping
+
+    Implement ProblemDetail-based error response structure
+
+    Refactor GlobalExceptionHandler to return standardized errors
+
+    Update services/controllers to throw AppException with ErrorType
+
+    Ensure validation and generic exceptions are handled consistently
+
+    Remove legacy or unstructured error responses
+
+# Epic 6: Observability & Documentation
+
+## EN-2: Logging & Monitoring
 
 **As a developer**, I want to implement centralized logging so that system issues can be traced and debugged easily.
 
@@ -164,7 +184,7 @@ attempts so that the system is protected from brute-force attacks.
 
     Logs forwarded to Splunk/ELK via agent or HEC
 
-## EN-2: API Documentation (Swagger)
+## EN-3: API Documentation (Swagger)
 
 **As a developer**, I want to document APIs using Swagger/OpenAPI so that frontend and QA teams can easily test APIs.
 
@@ -176,8 +196,8 @@ attempts so that the system is protected from brute-force attacks.
 
     JWT security documented in Swagger
 
-# Epic 6: Testing
-## EN-3: Unit Testing with JUnit
+# Epic 7: Testing
+## EN-4: Unit Testing with JUnit
 
 **As a developer**, I want to write JUnit test cases so that core business logic is validated automatically.
 
@@ -189,8 +209,8 @@ attempts so that the system is protected from brute-force attacks.
 
     Tests executed in CI pipeline
 
-#Epic 7: DevOps & Deployment
-##EN-4: CI/CD Pipeline using Jenkins
+# Epic 8: DevOps & Deployment
+## EN-5: CI/CD Pipeline using Jenkins
 
 **As a DevOps engineer**, I want to create a Jenkins pipeline so that code is automatically built, tested, and packaged.
 
@@ -202,7 +222,7 @@ attempts so that the system is protected from brute-force attacks.
 
     Artifacts stored in repository (Nexus/Registry)
 
-## EN-5: Containerization with Docker
+## EN-6: Containerization with Docker
 
 **As a developer**, I want to containerize the application so that it can run consistently across environments.
 
@@ -214,7 +234,7 @@ attempts so that the system is protected from brute-force attacks.
 
     Environment variables configured for DB and secrets
 
-## EN-6: Deployment Strategy
+## EN-7: Deployment Strategy
 
 ***As a DevOps engineer**, I want to deploy the application to a server/cloud so that users can access the system.
 
