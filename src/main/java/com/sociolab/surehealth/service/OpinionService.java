@@ -13,11 +13,12 @@ import com.sociolab.surehealth.repository.OpinionRepository;
 import com.sociolab.surehealth.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OpinionService {
 
     private final OpinionRepository opinionRepository;
@@ -26,38 +27,50 @@ public class OpinionService {
 
     @Transactional
     public OpinionResponse submitOpinion(Long caseId, String doctorEmail, OpinionRequest request) {
+        log.info("Submitting opinion for caseId={} by doctorEmail={}", caseId, doctorEmail);
+
         // 1. Fetch case
         MedicalCase medicalCase = caseRepository.findById(caseId)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Medical case not found"));
+                .orElseThrow(() -> {
+                    log.warn("Medical case not found caseId={}", caseId);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Medical case not found");
+                });
 
         // 2. Ensure case is in ACCEPTED status
         if (medicalCase.getStatus() != CaseStatus.ACCEPTED) {
-            throw new AppException(ErrorType.INVALID_OPERATION, "Opinions can only be submitted for cases in ACCEPTED status");
+            log.warn("Case not in ACCEPTED status caseId={} currentStatus={}", caseId, medicalCase.getStatus());
+            throw new AppException(ErrorType.INVALID_OPERATION,
+                    "Opinions can only be submitted for cases in ACCEPTED status");
         }
 
         // 3. Fetch doctor
         User doctor = userRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Doctor not found"));
+                .orElseThrow(() -> {
+                    log.warn("Doctor not found email={}", doctorEmail);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Doctor not found");
+                });
 
-        // 4. Optional: Verify doctor is assigned to the case (if workflow requires)
+        // 4. Verify doctor is assigned to the case
         if (!doctor.getId().equals(medicalCase.getDoctorId())) {
+            log.warn("Doctor not assigned to case caseId={} doctorId={}", caseId, doctor.getId());
             throw new AppException(ErrorType.INVALID_OPERATION, "You are not assigned to review this case");
         }
 
-        // 5. Create opinion entity
+        // 5. Create and save opinion
         Opinion opinion = new Opinion();
         opinion.setCaseId(medicalCase.getId());
         opinion.setDoctorId(doctor.getId());
         opinion.setComment(request.getComment());
 
-        // 6. Save opinion
         Opinion savedOpinion = opinionRepository.save(opinion);
+        log.debug("Opinion saved opinionId={}", savedOpinion.getId());
 
-        // 7. Update case status to REVIEWED
+        // 6. Update case status to REVIEWED
         medicalCase.setStatus(CaseStatus.REVIEWED);
         caseRepository.save(medicalCase);
+        log.info("Case status updated to REVIEWED caseId={}", caseId);
 
-        // 8. Return response DTO
+        // 7. Return response DTO
         return new OpinionResponse(
                 savedOpinion.getId(),
                 medicalCase.getId(),

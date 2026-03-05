@@ -11,6 +11,7 @@ import com.sociolab.surehealth.repository.MedicalCaseRepository;
 import com.sociolab.surehealth.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocumentService {
 
     private final MedicalCaseRepository caseRepository;
@@ -38,55 +40,101 @@ public class DocumentService {
     // ================= UPLOAD DOCUMENTS =================
     @Transactional
     public Page<DocumentResponse> uploadDocuments(Long caseId, String email, List<MultipartFile> files) {
+
+        log.info("Document upload attempt caseId={} userEmail={} fileCount={}",
+                caseId, email, files.size());
+
         MedicalCase medicalCase = caseRepository.findById(caseId)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found"));
+                .orElseThrow(() -> {
+                    log.warn("Upload failed - case not found caseId={}", caseId);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found");
+                });
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found"));
+                .orElseThrow(() -> {
+                    log.warn("Upload failed - user not found email={}", email);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
+                });
 
         if (!medicalCase.getPatientId().equals(user.getId())) {
-            throw new AppException(ErrorType.ACCESS_DENIED, "You are not allowed to upload documents for this case");
+            log.warn("Unauthorized document upload attempt caseId={} userId={}",
+                    caseId, user.getId());
+            throw new AppException(ErrorType.ACCESS_DENIED,
+                    "You are not allowed to upload documents for this case");
         }
 
         List<MedicalDocument> savedDocs = files.stream()
                 .map(file -> saveFile(file, medicalCase))
-                .collect(Collectors.toList());
+                .toList();
 
-        Pageable pageable = PageRequest.of(0, savedDocs.size()); // single page
+        log.info("Documents uploaded successfully caseId={} uploadedCount={} userId={}",
+                caseId, savedDocs.size(), user.getId());
+
+        Pageable pageable = PageRequest.of(0, savedDocs.size());
         return new PageImpl<>(savedDocs.stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList()), pageable, savedDocs.size());
+                .toList(), pageable, savedDocs.size());
     }
 
-    // ================= GET DOCUMENTS FOR CASE (PAGED) =================
+    // ================= GET DOCUMENTS FOR CASE =================
     public Page<DocumentResponse> getDocumentsForCase(Long caseId, String email, int page, int size) {
+
+        log.debug("Fetching documents caseId={} email={} page={} size={}",
+                caseId, email, page, size);
+
         MedicalCase medicalCase = caseRepository.findById(caseId)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found"));
+                .orElseThrow(() -> {
+                    log.warn("Document fetch failed - case not found caseId={}", caseId);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found");
+                });
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found"));
+                .orElseThrow(() -> {
+                    log.warn("Document fetch failed - user not found email={}", email);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
+                });
 
         if (!medicalCase.getPatientId().equals(user.getId()) &&
                 !medicalCase.getDoctorId().equals(user.getId())) {
-            throw new AppException(ErrorType.ACCESS_DENIED, "You are not allowed to view documents for this case");
+
+            log.warn("Unauthorized document access caseId={} userId={}",
+                    caseId, user.getId());
+
+            throw new AppException(ErrorType.ACCESS_DENIED,
+                    "You are not allowed to view documents for this case");
         }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("uploadedAt").descending());
-        Page<MedicalDocument> documentsPage = documentRepository.findByMedicalCaseId(caseId, pageable);
+        Page<MedicalDocument> documentsPage =
+                documentRepository.findByMedicalCaseId(caseId, pageable);
+
+        log.debug("Documents fetched caseId={} totalElements={}",
+                caseId, documentsPage.getTotalElements());
 
         return documentsPage.map(this::mapToResponse);
     }
 
-    // ================= HELPER: SAVE SINGLE FILE =================
+    // ================= SAVE SINGLE FILE =================
     private MedicalDocument saveFile(MultipartFile file, MedicalCase medicalCase) {
+
         String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
         Path filePath = Paths.get(uploadDir, fileName);
 
         try {
             Files.createDirectories(filePath.getParent());
             Files.write(filePath, file.getBytes());
+
+            log.debug("File written to disk generatedFileName={}", fileName);
+
         } catch (IOException e) {
-            throw new AppException(ErrorType.DOCUMENT_UPLOAD_FAILED, e.getMessage());
+
+            log.error("File upload failed caseId={} fileName={} error={}",
+                    medicalCase.getId(),
+                    file.getOriginalFilename(),
+                    e.getMessage());
+
+            throw new AppException(ErrorType.DOCUMENT_UPLOAD_FAILED,
+                    "Failed to upload document");
         }
 
         MedicalDocument doc = new MedicalDocument();
@@ -95,10 +143,14 @@ public class DocumentService {
         doc.setFilePath(filePath.toString());
         doc.setMedicalCase(medicalCase);
 
-        return documentRepository.save(doc);
+        MedicalDocument saved = documentRepository.save(doc);
+
+        log.info("Document metadata saved documentId={} caseId={}",
+                saved.getId(), medicalCase.getId());
+
+        return saved;
     }
 
-    // ================= HELPER: MAP TO RESPONSE =================
     private DocumentResponse mapToResponse(MedicalDocument doc) {
         return new DocumentResponse(
                 doc.getId(),

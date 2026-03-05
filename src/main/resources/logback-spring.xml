@@ -1,0 +1,52 @@
+<configuration>
+
+    <property name="APP_NAME" value="surehealth-api"/>
+
+    <!-- JSON Appender -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+
+                <timestamp>
+                    <fieldName>timestamp</fieldName>
+                </timestamp>
+
+                <logLevel>
+                    <fieldName>level</fieldName>
+                </logLevel>
+
+                <loggerName>
+                    <fieldName>logger</fieldName>
+                </loggerName>
+
+                <threadName>
+                    <fieldName>thread</fieldName>
+                </threadName>
+
+                <!-- This automatically includes traceId from MDC -->
+                <mdc/>
+
+                <message/>
+
+                <stackTrace/>
+
+                <globalCustomFields>
+                    {
+                    "service":"surehealth-api"
+                    }
+                </globalCustomFields>
+
+            </providers>
+        </encoder>
+    </appender>
+
+    <!-- Async wrapper for performance -->
+    <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="JSON"/>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="ASYNC"/>
+    </root>
+
+</configuration>

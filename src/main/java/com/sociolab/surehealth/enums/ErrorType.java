@@ -9,6 +9,8 @@ public enum ErrorType {
     UNAUTHORIZED("Authorization token missing or invalid", 401),
     ACCESS_DENIED("You do not have permission to access this resource", 403),
 
+    JWT_BLACKLISTED("JWT token is blacklisted", 401),
+    JWT_INVALID_TOKEN("JWT token is invalid", 401),
     // CLIENT / REQUEST ERRORS
     RESOURCE_NOT_FOUND("Requested resource not found", 404),
     DUPLICATE_RESOURCE("Resource already exists", 409),

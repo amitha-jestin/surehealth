@@ -9,6 +9,7 @@ import com.sociolab.surehealth.model.User;
 import com.sociolab.surehealth.repository.NotificationRepository;
 import com.sociolab.surehealth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
@@ -29,6 +31,8 @@ public class NotificationService {
     public void sendCaseNotification(Long userId,
                                      String message,
                                      NotificationEventType eventType) {
+
+        log.info("Sending notification userId={} eventType={} message={}", userId, eventType, message);
 
         Notification notification = Notification.builder()
                 .userId(userId)
@@ -44,28 +48,46 @@ public class NotificationService {
                 "/queue/notifications",
                 notification
         );
+
+        log.debug("Notification sent successfully userId={} notificationId={}", userId, notification.getId());
     }
 
     // ================= GET READ NOTIFICATIONS (PAGED) =================
     public Page<NotificationResponse> getReadNotificationsForCurrentUser(String email, int page, int size) {
+        log.debug("Fetching read notifications email={} page={} size={}", email, page, size);
+
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,"User not found"));
+                .orElseThrow(() -> {
+                    log.warn("User not found for fetching read notifications email={}", email);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
+                });
 
         Pageable pageable = PageRequest.of(page, size);
 
-        Page<Notification> notifications = notificationRepository.findByUserIdAndReadStatus(user.getId(), true, pageable);
+        Page<Notification> notifications =
+                notificationRepository.findByUserIdAndReadStatus(user.getId(), true, pageable);
+
+        log.debug("Read notifications fetched email={} total={}", email, notifications.getTotalElements());
 
         return notifications.map(this::mapToResponse);
     }
 
     // ================= GET UNREAD NOTIFICATIONS (PAGED) =================
     public Page<NotificationResponse> getUnreadNotificationsForCurrentUser(String email, int page, int size) {
+        log.debug("Fetching unread notifications email={} page={} size={}", email, page, size);
+
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,"User not found"));
+                .orElseThrow(() -> {
+                    log.warn("User not found for fetching unread notifications email={}", email);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
+                });
 
         Pageable pageable = PageRequest.of(page, size);
 
-        Page<Notification> notifications = notificationRepository.findByUserIdAndReadStatus(user.getId(), false, pageable);
+        Page<Notification> notifications =
+                notificationRepository.findByUserIdAndReadStatus(user.getId(), false, pageable);
+
+        log.debug("Unread notifications fetched email={} total={}", email, notifications.getTotalElements());
 
         return notifications.map(this::mapToResponse);
     }

@@ -1,7 +1,7 @@
 package com.sociolab.surehealth.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sociolab.surehealth.dto.ErrorResponse;
+import com.sociolab.surehealth.enums.ErrorType;
+import com.sociolab.surehealth.exception.custom.JwtAuthenticationException;
 import com.sociolab.surehealth.service.TokenBlacklistService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -9,6 +9,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -21,29 +22,15 @@ import java.util.List;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final ObjectMapper objectMapper;
     private final TokenBlacklistService tokenBlacklistService;
 
-    public JwtAuthenticationFilter(
-            JwtUtil jwtUtil,
-            ObjectMapper objectMapper,
-            TokenBlacklistService tokenBlacklistService
-    ) {
-        this.jwtUtil = jwtUtil;
-        this.objectMapper = objectMapper;
-        this.tokenBlacklistService = tokenBlacklistService;
-    }
-
-    /**
-     * ✅ Skip auth endpoints + websocket + swagger
-     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-
         return path.startsWith("/api/v1/auth/")
                 || path.startsWith("/ws")
                 || path.startsWith("/v3/api-docs")
@@ -51,45 +38,50 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String token = authHeader.substring(7);
 
         try {
 
-            String authHeader = request.getHeader("Authorization");
-
-            // ✅ No token → continue (public endpoints may exist)
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-
-            String token = authHeader.substring(7);
-
-            // 🔥 CRITICAL: check blacklist FIRST
+            // Blacklist check
             if (tokenBlacklistService.isBlacklisted(token)) {
-                log.warn("Blocked blacklisted JWT");
-
-                writeError(response,
-                        HttpServletResponse.SC_UNAUTHORIZED,
-                        "JWT_BLACKLISTED",
-                        "Token has been logged out. Please login again.");
-                return;
+                log.warn("JWT_BLACKLISTED path={}", request.getRequestURI());
+                throw new JwtAuthenticationException(
+                        ErrorType.JWT_BLACKLISTED,
+                        "Token has been logged out"
+                );
             }
 
-            // ✅ Avoid re-authentication
+            // Skip if already authenticated
             if (SecurityContextHolder.getContext().getAuthentication() != null) {
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            // ✅ Parse token
+            // Validate & parse JWT
             Claims claims = jwtUtil.extractAllClaims(token);
+
             String email = claims.getSubject();
             String role = claims.get("role", String.class);
+
+            if (email == null || role == null) {
+                log.warn("JWT_INVALID_CLAIMS path={}", request.getRequestURI());
+                throw new JwtAuthenticationException(
+                        ErrorType.JWT_INVALID_TOKEN,
+                        "Invalid JWT claims"
+                );
+            }
 
             var authorities = List.of(
                     new SimpleGrantedAuthority("ROLE_" + role)
@@ -103,42 +95,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
+            log.debug("JWT_AUTH_SUCCESS user={} path={}", email, request.getRequestURI());
+
             filterChain.doFilter(request, response);
 
         } catch (JwtException ex) {
 
-            log.warn("JWT validation failed: {}", ex.getMessage());
+            //  Do NOT log full stacktrace for common JWT failures
+            log.warn("JWT_INVALID path={} message={}",
+                    request.getRequestURI(),
+                    ex.getMessage());
 
-            writeError(response,
-                    HttpServletResponse.SC_UNAUTHORIZED,
-                    "JWT_INVALID",
-                    "Invalid or expired authentication token");
-
+            throw new JwtAuthenticationException(
+                    ErrorType.JWT_INVALID_TOKEN,
+                    "Invalid or expired token"
+            );
         } catch (Exception ex) {
 
-            log.error("Authentication error", ex);
-
-            writeError(response,
-                    HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-                    "AUTH_ERROR",
-                    "Authentication processing failed");
+            //Only unexpected system errors should be ERROR
+            log.error("JWT_PROCESSING_ERROR path={}", request.getRequestURI(), ex);
+            throw ex;
         }
-    }
-
-    /**
-     * ✅ Standardized error writer
-     */
-    private void writeError(HttpServletResponse response,
-                            int status,
-                            String code,
-                            String message) throws IOException {
-
-        response.setStatus(status);
-        response.setContentType("application/json");
-
-        objectMapper.writeValue(
-                response.getOutputStream(),
-                new ErrorResponse(code, message)
-        );
     }
 }

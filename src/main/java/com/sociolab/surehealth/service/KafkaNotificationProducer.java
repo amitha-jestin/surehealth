@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-//@Slf4j
+@Slf4j
 public class KafkaNotificationProducer {
 
     private final KafkaTemplate<String, CaseNotificationEvent> kafkaTemplate;
@@ -16,7 +16,7 @@ public class KafkaNotificationProducer {
     private static final String TOPIC = "case-notification-topic";
 
     public void sendEvent(CaseNotificationEvent event) {
-    //    log.info("Publishing Kafka event for user {}", event.getUserId());
+       log.info("Publishing Kafka event for user {}", event.getUserId());
         kafkaTemplate.send(TOPIC, event);
     }
 }

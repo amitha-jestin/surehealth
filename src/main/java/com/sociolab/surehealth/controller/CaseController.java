@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,7 @@ import java.util.List;
 @Validated
 @RequestMapping("/api/v1/cases")
 @RequiredArgsConstructor
+@Slf4j
 public class CaseController {
 
     private final CaseService caseService;
@@ -36,7 +39,13 @@ public class CaseController {
             Authentication authentication
     ) {
         String email = authentication.getName();
+        log.info("CASE_SUBMIT_ATTEMPT: patient={} traceId={}", email, MDC.get("traceId"));
+
         CaseResponse response = caseService.submitCase(email, request);
+
+        log.info("CASE_SUBMIT_SUCCESS: patient={} caseId={} traceId={}",
+                email, response.caseId(), MDC.get("traceId"));
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ResponseUtil.success(response));
     }
@@ -50,8 +59,15 @@ public class CaseController {
             Authentication authentication
     ) {
         String email = authentication.getName();
+        log.info("DOCUMENT_UPLOAD_ATTEMPT: patient={} caseId={} fileCount={} traceId={}",
+                email, caseId, files.size(), MDC.get("traceId"));
+
         Page<DocumentResponse> response =
                 documentService.uploadDocuments(caseId, email, files);
+
+        log.info("DOCUMENT_UPLOAD_SUCCESS: patient={} caseId={} uploadedCount={} traceId={}",
+                email, caseId, response.getNumberOfElements(), MDC.get("traceId"));
+
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
 
@@ -65,8 +81,12 @@ public class CaseController {
             Authentication authentication
     ) {
         String email = authentication.getName();
+        log.debug("CASE_DOC_QUERY: user={} caseId={} page={} size={} traceId={}",
+                email, caseId, page, size, MDC.get("traceId"));
+
         Page<DocumentResponse> response =
                 documentService.getDocumentsForCase(caseId, email, page, size);
+
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
 
@@ -78,7 +98,12 @@ public class CaseController {
             Authentication authentication
     ) {
         String email = authentication.getName();
+        log.info("CASE_ACCEPT_ATTEMPT: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+
         CaseResponse response = caseService.acceptCase(caseId, email);
+
+        log.info("CASE_ACCEPT_SUCCESS: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+
         return ResponseEntity.ok(ResponseUtil.success(response));
     }
 
@@ -90,7 +115,12 @@ public class CaseController {
             Authentication authentication
     ) {
         String email = authentication.getName();
+        log.info("CASE_REJECT_ATTEMPT: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+
         CaseResponse response = caseService.rejectCase(caseId, email);
+
+        log.info("CASE_REJECT_SUCCESS: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+
         return ResponseEntity.ok(ResponseUtil.success(response));
     }
 
@@ -103,8 +133,12 @@ public class CaseController {
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
         String email = authentication.getName();
+        log.debug("MY_CASES_QUERY: user={} page={} size={} traceId={}",
+                email, page, size, MDC.get("traceId"));
+
         Page<CaseResponse> pagedCases =
                 caseService.getMyCases(email, page, size);
+
         return ResponseEntity.ok(ResponseUtil.paged(pagedCases));
     }
 }

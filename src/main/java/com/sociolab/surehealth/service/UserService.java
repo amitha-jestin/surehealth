@@ -11,70 +11,84 @@ import com.sociolab.surehealth.model.User;
 import com.sociolab.surehealth.repository.DoctorRepository;
 import com.sociolab.surehealth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final DoctorRepository doctorRepository;
 
-
-
     public User registerPatient(UserRegisterRequest req) {
+        log.info("Registering new patient with email={}", req.getEmail());
 
         userRepository.findByEmail(req.getEmail())
-                .ifPresent(u -> { throw new AppException(ErrorType.DUPLICATE_RESOURCE , "Email already exists");
+                .ifPresent(u -> {
+                    log.warn("Duplicate patient email attempted: {}", req.getEmail());
+                    throw new AppException(ErrorType.DUPLICATE_RESOURCE, "Email already exists");
                 });
 
         User user = new User();
         user.setName(req.getName());
         user.setEmail(req.getEmail());
-        user.setRole(Role.PATIENT); // default
-        user.setStatus(AccountStatus.ACTIVE); // default
+        user.setRole(Role.PATIENT);
+        user.setStatus(AccountStatus.ACTIVE);
         user.setPassword(passwordEncoder.encode(req.getPassword()));
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        log.info("Patient registered successfully userId={}", savedUser.getId());
+
+        return savedUser;
     }
 
     public Doctor registerDoctor(DoctorRegisterRequest req) {
+        log.info("Registering new doctor with email={} licenseNumber={}", req.getEmail(), req.getLicenseNumber());
 
         userRepository.findByEmail(req.getEmail())
-                .ifPresent(u -> { throw new AppException(ErrorType.DUPLICATE_RESOURCE, "Email already exists");
+                .ifPresent(u -> {
+                    log.warn("Duplicate doctor email attempted: {}", req.getEmail());
+                    throw new AppException(ErrorType.DUPLICATE_RESOURCE, "Email already exists");
                 });
 
         if (doctorRepository.existsByLicenseNumber(req.getLicenseNumber())) {
+            log.warn("Duplicate doctor license attempted: {}", req.getLicenseNumber());
             throw new AppException(ErrorType.DUPLICATE_RESOURCE, "License number already exists");
         }
+
         User user = new User();
         user.setName(req.getName());
         user.setEmail(req.getEmail());
-        user.setRole(Role.PENDING_DOCTOR); // default
-        user.setStatus(AccountStatus.PENDING); // default
+        user.setRole(Role.PENDING_DOCTOR);
+        user.setStatus(AccountStatus.PENDING);
         user.setPassword(passwordEncoder.encode(req.getPassword()));
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        log.info("User entry for doctor created userId={}", savedUser.getId());
 
         Doctor doctor = new Doctor();
-        doctor.setUser(user);
+        doctor.setUser(savedUser);
         doctor.setLicenseNumber(req.getLicenseNumber());
         doctor.setSpeciality(req.getSpeciality());
         doctor.setExperienceYears(req.getExperienceYears());
         doctor.setVerified(false);
 
-        doctorRepository.save(doctor);
+        Doctor savedDoctor = doctorRepository.save(doctor);
+        log.info("Doctor registered successfully doctorId={}", savedDoctor.getUserId());
 
-        return doctor;
+        return savedDoctor;
     }
 
     public User getUser(Long id) {
+        log.info("Fetching user with id={}", id);
         return userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND,"User not found"));
+                .orElseThrow(() -> {
+                    log.warn("User not found id={}", id);
+                    return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
+                });
     }
-
-
-
 }
