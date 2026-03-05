@@ -13,9 +13,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 @RestController
-@RequestMapping("/api/v1/notifications")
+@RequestMapping(value = "/api/v1/notifications", produces = "application/json")
 @RequiredArgsConstructor
 @PreAuthorize("isAuthenticated()")
 @Slf4j
@@ -24,6 +27,10 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     // ================= UNREAD =================
+    @Operation(summary = "Get unread notifications", description = "Retrieve all unread notifications for the current user")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Unread notifications retrieved successfully")
+    })
     @GetMapping("/unread")
     public ResponseEntity<PagedResponse<NotificationResponse>> getUnreadNotifications(
             @Min(0) @RequestParam(defaultValue = "0") int page,
@@ -44,6 +51,10 @@ public class NotificationController {
     }
 
     // ================= READ =================
+    @Operation(summary = "Get read notifications", description = "Retrieve all read notifications for the current user")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Read notifications retrieved successfully")
+    })
     @GetMapping("/read")
     public ResponseEntity<PagedResponse<NotificationResponse>> getReadNotifications(
             @Min(0) @RequestParam(defaultValue = "0") int page,

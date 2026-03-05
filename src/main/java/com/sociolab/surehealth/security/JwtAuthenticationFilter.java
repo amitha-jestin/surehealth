@@ -31,12 +31,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        return path.startsWith("/api/v1/auth/")
-                || path.startsWith("/ws")
-                || path.startsWith("/v3/api-docs")
-                || path.startsWith("/swagger-ui");
-    }
 
+        return path.startsWith("/api/v1/auth/")  // your auth endpoints
+                || path.startsWith("/ws")       // websocket endpoints
+                || path.startsWith("/v3/api-docs") // OpenAPI JSON
+                || path.startsWith("/swagger-ui") // Swagger UI static content
+                || path.startsWith("/swagger-ui.html") // legacy Swagger UI path
+                || path.startsWith("/swagger-resources") // Swagger resources
+                || path.startsWith("/webjars"); // Swagger static assets
+    }
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,

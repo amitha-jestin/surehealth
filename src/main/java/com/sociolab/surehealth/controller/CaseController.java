@@ -18,12 +18,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 import java.util.List;
 
 @RestController
 @Validated
-@RequestMapping("/api/v1/cases")
+@RequestMapping(value = "/api/v1/cases", produces = "application/json")
 @RequiredArgsConstructor
 @Slf4j
 public class CaseController {
@@ -32,9 +35,15 @@ public class CaseController {
     private final DocumentService documentService;
 
     // ================= SUBMIT CASE =================
+    @Operation(summary = "Submit a new case", description = "Patient submits a new medical case")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Case submitted successfully"),
+            @ApiResponse(responseCode = "404", description = "Patient or doctor not found"),
+            @ApiResponse(responseCode = "400", description = "Validation error or invalid data")
+    })
     @PostMapping
     @PreAuthorize("hasRole('PATIENT')")
-    public ResponseEntity<ApiResponse<CaseResponse>> submitCase(
+    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<CaseResponse>> submitCase(
             @Valid @RequestBody CaseRequest request,
             Authentication authentication
     ) {
@@ -51,6 +60,12 @@ public class CaseController {
     }
 
     // ================= UPLOAD DOCUMENT =================
+    @Operation(summary = "Upload documents for a case", description = "Patient uploads documents for their case")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documents uploaded successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "Case not found")
+    })
     @PostMapping("/{caseId}/documents")
     @PreAuthorize("hasRole('PATIENT')")
     public ResponseEntity<PagedResponse<DocumentResponse>> uploadDocument(
@@ -62,8 +77,7 @@ public class CaseController {
         log.info("DOCUMENT_UPLOAD_ATTEMPT: patient={} caseId={} fileCount={} traceId={}",
                 email, caseId, files.size(), MDC.get("traceId"));
 
-        Page<DocumentResponse> response =
-                documentService.uploadDocuments(caseId, email, files);
+        Page<DocumentResponse> response = documentService.uploadDocuments(caseId, email, files);
 
         log.info("DOCUMENT_UPLOAD_SUCCESS: patient={} caseId={} uploadedCount={} traceId={}",
                 email, caseId, response.getNumberOfElements(), MDC.get("traceId"));
@@ -72,6 +86,12 @@ public class CaseController {
     }
 
     // ================= GET CASE DOCUMENTS =================
+    @Operation(summary = "Get documents for a case", description = "Retrieve documents for a case (patient or doctor)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Documents retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "Case not found")
+    })
     @GetMapping("/{caseId}/documents")
     @PreAuthorize("hasRole('PATIENT') or hasRole('DOCTOR')")
     public ResponseEntity<PagedResponse<DocumentResponse>> getCaseDocuments(
@@ -84,16 +104,21 @@ public class CaseController {
         log.debug("CASE_DOC_QUERY: user={} caseId={} page={} size={} traceId={}",
                 email, caseId, page, size, MDC.get("traceId"));
 
-        Page<DocumentResponse> response =
-                documentService.getDocumentsForCase(caseId, email, page, size);
+        Page<DocumentResponse> response = documentService.getDocumentsForCase(caseId, email, page, size);
 
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
 
     // ================= ACCEPT CASE =================
+    @Operation(summary = "Accept a case", description = "Doctor accepts an assigned case")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Case accepted successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "Case not found")
+    })
     @PatchMapping("/{caseId}/accept")
     @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<ApiResponse<CaseResponse>> acceptCase(
+    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<CaseResponse>> acceptCase(
             @PathVariable Long caseId,
             Authentication authentication
     ) {
@@ -108,9 +133,15 @@ public class CaseController {
     }
 
     // ================= REJECT CASE =================
+    @Operation(summary = "Reject a case", description = "Doctor rejects an assigned case")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Case rejected successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "Case not found")
+    })
     @PatchMapping("/{caseId}/reject")
     @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<ApiResponse<CaseResponse>> rejectCase(
+    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<CaseResponse>> rejectCase(
             @PathVariable Long caseId,
             Authentication authentication
     ) {
@@ -125,6 +156,10 @@ public class CaseController {
     }
 
     // ================= GET MY CASES =================
+    @Operation(summary = "Get my cases", description = "Retrieve all cases for current user (patient or doctor)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Cases retrieved successfully")
+    })
     @GetMapping("/my")
     @PreAuthorize("hasRole('PATIENT') or hasRole('DOCTOR')")
     public ResponseEntity<PagedResponse<CaseResponse>> getMyCases(
@@ -133,11 +168,9 @@ public class CaseController {
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
         String email = authentication.getName();
-        log.debug("MY_CASES_QUERY: user={} page={} size={} traceId={}",
-                email, page, size, MDC.get("traceId"));
+        log.debug("MY_CASES_QUERY: user={} page={} size={} traceId={}", email, page, size, MDC.get("traceId"));
 
-        Page<CaseResponse> pagedCases =
-                caseService.getMyCases(email, page, size);
+        Page<CaseResponse> pagedCases = caseService.getMyCases(email, page, size);
 
         return ResponseEntity.ok(ResponseUtil.paged(pagedCases));
     }
