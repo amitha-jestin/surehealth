@@ -2,7 +2,7 @@ package com.sociolab.surehealth.security;
 
 import com.sociolab.surehealth.enums.ErrorType;
 import com.sociolab.surehealth.exception.custom.JwtAuthenticationException;
-import com.sociolab.surehealth.service.TokenBlacklistService;
+import com.sociolab.surehealth.service.RedisService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -26,7 +26,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final TokenBlacklistService tokenBlacklistService;
+    private final RedisService redisService;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -58,7 +58,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
 
             // Blacklist check
-            if (tokenBlacklistService.isBlacklisted(token)) {
+            if (redisService.isTokenBlacklisted(token)) {
                 log.warn("JWT_BLACKLISTED path={}", request.getRequestURI());
                 throw new JwtAuthenticationException(
                         ErrorType.JWT_BLACKLISTED,

@@ -28,7 +28,7 @@ public final class UserBuilder {
         int n = SEQ.getAndIncrement();
         this.name = "Test User " + n;
         this.email = "user" + n + "@example.com";
-        this.password = "password"; // raw; encode before persisting
+        this.password = "Password@12"; // raw; encode before persisting
         this.role = Role.PATIENT;
         this.status = AccountStatus.ACTIVE;
         this.createdAt = LocalDateTime.now();

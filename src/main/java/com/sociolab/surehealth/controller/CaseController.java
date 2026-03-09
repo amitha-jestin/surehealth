@@ -43,7 +43,7 @@ public class CaseController {
     })
     @PostMapping
     @PreAuthorize("hasRole('PATIENT')")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<CaseResponse>> submitCase(
+    public ResponseEntity<BaseResponse<CaseResponse>> submitCase(
             @Valid @RequestBody CaseRequest request,
             Authentication authentication
     ) {
@@ -118,7 +118,7 @@ public class CaseController {
     })
     @PatchMapping("/{caseId}/accept")
     @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<CaseResponse>> acceptCase(
+    public ResponseEntity<BaseResponse<CaseResponse>> acceptCase(
             @PathVariable Long caseId,
             Authentication authentication
     ) {
@@ -141,7 +141,7 @@ public class CaseController {
     })
     @PatchMapping("/{caseId}/reject")
     @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<CaseResponse>> rejectCase(
+    public ResponseEntity<BaseResponse<CaseResponse>> rejectCase(
             @PathVariable Long caseId,
             Authentication authentication
     ) {

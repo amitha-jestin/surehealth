@@ -35,7 +35,7 @@ public class AdminController {
             @ApiResponse(responseCode = "400", description = "Doctor already active or blocked")
     })
     @PatchMapping("/doctors/{doctorId}/approve")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<Void>> approveDoctor(
+    public ResponseEntity<BaseResponse<Void>> approveDoctor(
             @PathVariable @Min(1) Long doctorId) {
 
         log.info("ADMIN_ACTION: approveDoctor doctorId={} traceId={}", doctorId, MDC.get("traceId"));
@@ -55,7 +55,7 @@ public class AdminController {
             @ApiResponse(responseCode = "400", description = "User already blocked")
     })
     @PatchMapping("/users/{userId}/block")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<Void>> blockUser(
+    public ResponseEntity<BaseResponse<Void>> blockUser(
             @PathVariable @Min(1) Long userId) {
 
         log.info("ADMIN_ACTION: blockUser userId={} traceId={}", userId, MDC.get("traceId"));
@@ -75,7 +75,7 @@ public class AdminController {
             @ApiResponse(responseCode = "400", description = "User already active or invalid status")
     })
     @PatchMapping("/users/{userId}/unblock")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<Void>> unblockUser(
+    public ResponseEntity<BaseResponse<Void>> unblockUser(
             @PathVariable @Min(1) Long userId) {
 
         log.info("ADMIN_ACTION: unblockUser userId={} traceId={}", userId, MDC.get("traceId"));

@@ -1,21 +1,25 @@
 package com.sociolab.surehealth.controller;
 
-import com.sociolab.surehealth.dto.*;
-import com.sociolab.surehealth.model.Doctor;
-import com.sociolab.surehealth.model.User;
+import com.sociolab.surehealth.dto.BaseResponse;
+import com.sociolab.surehealth.dto.DoctorRegisterRequest;
+import com.sociolab.surehealth.dto.UserRegisterRequest;
+import com.sociolab.surehealth.dto.UserRegisterResponse;
+import com.sociolab.surehealth.logging.LogUtil;
 import com.sociolab.surehealth.service.UserService;
 import com.sociolab.surehealth.utils.ResponseUtil;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
-import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 
@@ -35,31 +39,18 @@ public class UserController {
             @ApiResponse(responseCode = "400", description = "Email already exists or validation error")
     })
     @PostMapping("/patient")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<UserRegisterResponse>> registerPatient(
+    public ResponseEntity<BaseResponse<UserRegisterResponse>> registerPatient(
             @Valid @RequestBody UserRegisterRequest request
     ) {
-        log.info("USER_REGISTER_ATTEMPT: role=PATIENT email={} traceId={}", request.getEmail(), MDC.get("traceId"));
+        log.info("USER_REGISTER_ATTEMPT: role=PATIENT email={}", LogUtil.maskEmail(request.getEmail()));
 
-        User patient = userService.registerPatient(request);
+        UserRegisterResponse patient = userService.registerPatient(request);
 
-        URI location = ServletUriComponentsBuilder
-                .fromCurrentRequest()
-                .path("/{id}")
-                .buildAndExpand(patient.getId())
-                .toUri();
+        URI location = createLocation(patient);
 
-        UserRegisterResponse response = new UserRegisterResponse(
-                patient.getId(),
-                patient.getName(),
-                patient.getEmail(),
-                patient.getRole().name(),
-                "Patient registered successfully"
-        );
+        log.info("USER_REGISTER_SUCCESS: role=PATIENT id={}", patient.id());
 
-        log.info("USER_REGISTER_SUCCESS: role=PATIENT email={} id={} traceId={}",
-                patient.getEmail(), patient.getId(), MDC.get("traceId"));
-
-        return ResponseEntity.created(location).body(ResponseUtil.success(response));
+        return ResponseEntity.created(location).body(ResponseUtil.success(patient));
     }
 
     // ================= REGISTER DOCTOR =================
@@ -69,30 +60,27 @@ public class UserController {
             @ApiResponse(responseCode = "400", description = "Email or license already exists or validation error")
     })
     @PostMapping("/doctor")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<UserRegisterResponse>> registerDoctor(
+    public ResponseEntity<BaseResponse<UserRegisterResponse>> registerDoctor(
             @Valid @RequestBody DoctorRegisterRequest request
     ) {
-        log.info("USER_REGISTER_ATTEMPT: role=DOCTOR email={} traceId={}", request.getEmail(), MDC.get("traceId"));
+        log.info("USER_REGISTER_ATTEMPT: role=DOCTOR email={}", LogUtil.maskEmail(request.getEmail()));
 
-        Doctor doctor = userService.registerDoctor(request);
+        UserRegisterResponse doctor = userService.registerDoctor(request);
 
-        URI location = ServletUriComponentsBuilder
+        URI location = createLocation(doctor);
+
+        log.info("USER_REGISTER_SUCCESS: role=DOCTOR id={}",
+                 doctor.id());
+
+        return ResponseEntity.created(location).body(ResponseUtil.success(doctor));
+    }
+
+    private URI createLocation(UserRegisterResponse user) {
+        return ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .path("/{id}")
-                .buildAndExpand(doctor.getUser().getId())
+                .buildAndExpand(user.id())
                 .toUri();
-
-        UserRegisterResponse response = new UserRegisterResponse(
-                doctor.getUser().getId(),
-                doctor.getUser().getName(),
-                doctor.getUser().getEmail(),
-                doctor.getUser().getRole().name(),
-                "Doctor registered successfully. Awaiting admin approval"
-        );
-
-        log.info("USER_REGISTER_SUCCESS: role=DOCTOR email={} id={} traceId={}",
-                doctor.getUser().getEmail(), doctor.getUser().getId(), MDC.get("traceId"));
-
-        return ResponseEntity.created(location).body(ResponseUtil.success(response));
     }
+
 }

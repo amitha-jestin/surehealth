@@ -1,14 +1,13 @@
 package com.sociolab.surehealth.dto;
 
-import com.sociolab.surehealth.enums.Role;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import jakarta.validation.constraints.NotBlank;
 
 
 @Getter
@@ -25,7 +24,11 @@ public class UserRegisterRequest {
     private String email;
 
     @NotBlank(message = "Password is required")
-    @Size(min = 8)
+    @Size(min = 8, message = "Password must be at least 8 characters")
+    @Pattern(
+            regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=]).*$",
+            message = "Password must contain uppercase, lowercase, number, and special character"
+    )
     private String password;
 
 

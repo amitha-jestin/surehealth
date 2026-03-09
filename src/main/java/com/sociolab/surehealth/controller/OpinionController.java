@@ -33,7 +33,7 @@ public class OpinionController {
             @ApiResponse(responseCode = "400", description = "Invalid case status or unauthorized doctor")
     })
     @PostMapping("/{caseId}")
-    public ResponseEntity<com.sociolab.surehealth.dto.ApiResponse<OpinionResponse>> submitOpinion(
+    public ResponseEntity<BaseResponse<OpinionResponse>> submitOpinion(
             @PathVariable Long caseId,
             @RequestBody @Valid OpinionRequest opinionRequest,
             Authentication authentication

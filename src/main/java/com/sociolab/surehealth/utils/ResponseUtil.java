@@ -1,11 +1,9 @@
 package com.sociolab.surehealth.utils;
 
-import com.sociolab.surehealth.dto.ApiResponse;
+import com.sociolab.surehealth.dto.BaseResponse;
 import com.sociolab.surehealth.dto.PagedResponse;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
-
-import java.util.List;
 
 public final class ResponseUtil {
 
@@ -14,16 +12,16 @@ public final class ResponseUtil {
 
     private ResponseUtil() {}
 
-    public static <T> ApiResponse<T> success(T data) {
-        return ApiResponse.success(
+    public static <T> BaseResponse<T> success(T data) {
+        return BaseResponse.success(
                 data,
                 MDC.get(TRACE_ID),
                 VERSION
         );
     }
 
-    public static ApiResponse<Void> successMessage(String message) {
-        return ApiResponse.successMessage(
+    public static BaseResponse<Void> successMessage(String message) {
+        return BaseResponse.successMessage(
                 message,
                 MDC.get(TRACE_ID),
                 VERSION

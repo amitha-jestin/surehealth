@@ -1,7 +1,5 @@
 package com.sociolab.surehealth.model;
 
-import com.sociolab.surehealth.enums.AccountStatus;
-import com.sociolab.surehealth.enums.Role;
 import com.sociolab.surehealth.enums.Speciality;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -26,7 +24,6 @@ public class Doctor {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(nullable = false, unique = true)
     private String licenseNumber;
 
     @Enumerated(EnumType.STRING)
@@ -35,8 +32,5 @@ public class Doctor {
     private int experienceYears;
 
     private boolean verified;
-
-
-
 
 }

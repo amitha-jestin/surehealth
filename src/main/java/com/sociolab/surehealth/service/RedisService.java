@@ -1,0 +1,42 @@
+package com.sociolab.surehealth.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.TimeUnit;
+
+@Service
+@RequiredArgsConstructor
+public class RedisService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    // ---------------- Refresh Token ----------------
+
+    public void saveRefreshToken(Long userId, String refreshToken, long expiration) {
+        String key = "refresh_token:" + userId;
+        redisTemplate.opsForValue().set(key, refreshToken, expiration, TimeUnit.SECONDS);
+    }
+
+    public String getRefreshToken(Long userId) {
+        return redisTemplate.opsForValue().get("refresh_token:" + userId);
+    }
+
+    public void deleteRefreshToken(Long userId) {
+        redisTemplate.delete("refresh_token:" + userId);
+    }
+
+    // ---------------- Token Blacklist ----------------
+
+    public void blacklistToken(String token, long expiration) {
+        String key = "blacklist_token:" + token;
+        redisTemplate.opsForValue().set(key, "blacklisted", expiration, TimeUnit.SECONDS);
+    }
+
+    public boolean isTokenBlacklisted(String token) {
+        return Boolean.TRUE.equals(
+                redisTemplate.hasKey("blacklist_token:" + token)
+        );
+    }
+}

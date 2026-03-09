@@ -20,6 +20,9 @@ public class JwtUtil {
     @Value("${jwt.expiration.access}")
     private long jwtExpirationMs;
 
+    @Value("${jwt.refresh-expiration}")
+    private long refreshExpirationMs;
+
     private SecretKey key;
 
     @PostConstruct
@@ -52,6 +55,18 @@ public class JwtUtil {
                 .compact();
     }
 
+    public String generateRefreshToken(Long userId) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + refreshExpirationMs);
+
+        return Jwts.builder()
+                .setSubject(userId.toString())
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(key, Jwts.SIG.HS256)
+                .compact();
+    }
+
     /* =====================================================
        TOKEN PARSING (throws JwtException)
        ===================================================== */
@@ -62,5 +77,28 @@ public class JwtUtil {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public Long extractUserId(String refreshToken) {
+        Claims claims = extractAllClaims(refreshToken);
+        String userIdStr = claims.getSubject();
+        return Long.parseLong(userIdStr);
+    }
+
+    public Long extractUserIdFromAccessToken(String accessToken) {
+            Claims claims = extractAllClaims(accessToken);
+            return claims.get("id", Long.class);
+        }
+
+    public long getRefreshExpirationSeconds() {
+        return refreshExpirationMs / 1000;
+    }
+
+    public long getRemainingExpiration(String token) {
+        Claims claims = extractAllClaims(token);
+        Date expiration = claims.getExpiration();
+        long now = System.currentTimeMillis();
+        long expiryTime = expiration.getTime();
+        return Math.max(0, (expiryTime - now) / 1000);
     }
 }

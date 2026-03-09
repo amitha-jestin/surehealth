@@ -36,7 +36,7 @@ public class TestDataFactory {
     public User createAdmin(String rawPassword) {
         User user = UserBuilder.aUser()
                 .withRole(Role.ADMIN)
-                .withPassword(rawPassword == null ? "adminpass" : rawPassword)
+                .withPassword(rawPassword == null ? "Admin@1pass" : rawPassword)
                 .withEmail("admin@example.com")
                 .withName("Admin User")
                 .build();
@@ -49,7 +49,7 @@ public class TestDataFactory {
     public User createPatient(String rawPassword) {
         User user = UserBuilder.aUser()
                 .withRole(Role.PATIENT)
-                .withPassword(rawPassword == null ? "patientpass" : rawPassword)
+                .withPassword(rawPassword == null ? "Patient@2pass" : rawPassword)
                 .withEmail("patient" + UUID.randomUUID() + "@example.com")
                 .withName("Patient User")
                 .build();
@@ -63,7 +63,7 @@ public class TestDataFactory {
         // create user first
         User user = UserBuilder.aUser()
                 .withRole(Role.DOCTOR)
-                .withPassword(rawPassword == null ? "doctorpass" : rawPassword)
+                .withPassword(rawPassword == null ? "Doctor@1pass" : rawPassword)
                 .withEmail("doctor+" + UUID.randomUUID() + "@example.com")
                 .withName("Doctor User")
                 .build();
