@@ -20,7 +20,7 @@ public enum ErrorType {
     INTERNAL_SERVER_ERROR("Internal server error", 500),
     NOTIFICATION_FAILED("Unable to send notification, please try again later", 500),
     USER_ACTIVE("User account is active", 400),
-    USER_BLOCKED("User account is locked", 400),
+    USER_BLOCKED("User account is locked", 403),
     USER_PENDING("User account is pending activation", 400),
     USER_INVALID_STATUS("User account is in invalid status for this operation", 400),
     INVALID_OPERATION("Invalid operation for the current state", 400),

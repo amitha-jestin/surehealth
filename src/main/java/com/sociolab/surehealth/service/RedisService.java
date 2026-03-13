@@ -39,4 +39,9 @@ public class RedisService {
                 redisTemplate.hasKey("blacklist_token:" + token)
         );
     }
+
+    public void clearAll() {
+        // For testing purposes only - clears all keys in Redis
+        redisTemplate.getConnectionFactory().getConnection().flushDb();
+    }
 }

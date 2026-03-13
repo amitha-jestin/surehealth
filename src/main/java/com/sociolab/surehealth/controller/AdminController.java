@@ -1,6 +1,7 @@
 package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
+import com.sociolab.surehealth.security.SecurityUtil;
 import com.sociolab.surehealth.service.AdminService;
 import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.constraints.Max;
@@ -38,9 +39,9 @@ public class AdminController {
     public ResponseEntity<BaseResponse<Void>> approveDoctor(
             @PathVariable @Min(1) Long doctorId) {
 
-        log.info("ADMIN_ACTION: approveDoctor doctorId={} traceId={}", doctorId, MDC.get("traceId"));
-        adminService.approveDoctor(doctorId);
-        log.info("ADMIN_ACTION_SUCCESS: approveDoctor doctorId={} traceId={}", doctorId, MDC.get("traceId"));
+        Long adminId = SecurityUtil.getCurrentUserId();
+        log.info("ADMIN_ACTION: approveDoctor doctorId={} adminId ={} ", doctorId , adminId);
+        adminService.approveDoctor(adminId , doctorId);
 
         return ResponseEntity.ok(
                 ResponseUtil.successMessage("Doctor approved successfully")
@@ -58,10 +59,9 @@ public class AdminController {
     public ResponseEntity<BaseResponse<Void>> blockUser(
             @PathVariable @Min(1) Long userId) {
 
-        log.info("ADMIN_ACTION: blockUser userId={} traceId={}", userId, MDC.get("traceId"));
-        adminService.blockUser(userId);
-        log.info("ADMIN_ACTION_SUCCESS: blockUser userId={} traceId={}", userId, MDC.get("traceId"));
-
+        Long adminId = SecurityUtil.getCurrentUserId();
+        log.info("ADMIN_ACTION: blockUser userId={} adminId={}", userId , adminId);
+        adminService.blockUser(adminId, userId);
         return ResponseEntity.ok(
                 ResponseUtil.successMessage("User blocked successfully")
         );
@@ -77,10 +77,9 @@ public class AdminController {
     @PatchMapping("/users/{userId}/unblock")
     public ResponseEntity<BaseResponse<Void>> unblockUser(
             @PathVariable @Min(1) Long userId) {
-
-        log.info("ADMIN_ACTION: unblockUser userId={} traceId={}", userId, MDC.get("traceId"));
-        adminService.unblockUser(userId);
-        log.info("ADMIN_ACTION_SUCCESS: unblockUser userId={} traceId={}", userId, MDC.get("traceId"));
+        Long adminId = SecurityUtil.getCurrentUserId();
+        log.info("ADMIN_ACTION: unblockUser userId={} adminId={}", userId,  adminId);
+        adminService.unblockUser(adminId , userId);
 
         return ResponseEntity.ok(
                 ResponseUtil.successMessage("User unblocked successfully")
@@ -95,9 +94,9 @@ public class AdminController {
     @GetMapping("/patients")
     public ResponseEntity<PagedResponse<PatientSummary>> getAllPatients(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
 
-        log.debug("ADMIN_QUERY: getAllPatients page={} size={} traceId={}", page, size, MDC.get("traceId"));
+        log.debug("ADMIN_QUERY: getAllPatients page={} size={}", page, size);
         var pagedPatients = adminService.getAllPatients(page, size);
         return ResponseEntity.ok(ResponseUtil.paged(pagedPatients));
     }
@@ -110,9 +109,9 @@ public class AdminController {
     @GetMapping("/doctors")
     public ResponseEntity<PagedResponse<DoctorResponse>> getAllDoctors(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
 
-        log.debug("ADMIN_QUERY: getAllDoctors page={} size={} traceId={}", page, size, MDC.get("traceId"));
+        log.debug("ADMIN_QUERY: getAllDoctors page={} size={} ", page, size);
         var pagedDoctors = adminService.getAllDoctors(page, size);
         return ResponseEntity.ok(ResponseUtil.paged(pagedDoctors));
     }

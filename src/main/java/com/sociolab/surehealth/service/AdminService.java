@@ -12,7 +12,6 @@ import com.sociolab.surehealth.repository.DoctorRepository;
 import com.sociolab.surehealth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -31,12 +30,9 @@ public class AdminService {
     private final UserRepository userRepository;
 
     // ================== APPROVE DOCTOR ==================
-
     @Transactional
-    public void approveDoctor(Long doctorId) {
-
-        log.info("APPROVE_DOCTOR_ATTEMPT: doctorId={} traceId={}",
-                doctorId, MDC.get("traceId"));
+    public void approveDoctor(Long adminId, Long doctorId) {
+        log.info("admin_action=approve_doctor adminId={} doctorId={}" ,adminId, doctorId);
 
         Doctor doctor = doctorRepository.findByUserId(doctorId)
                 .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND));
@@ -44,122 +40,106 @@ public class AdminService {
         AccountStatus status = doctor.getUser().getStatus();
 
         if (status == AccountStatus.ACTIVE) {
-            log.warn("APPROVE_DOCTOR_FAILED: doctorId={} reason=ALREADY_ACTIVE traceId={}",
-                    doctorId, MDC.get("traceId"));
+            log.warn("admin_action_failed=approve_doctor adminId={} doctorId={} reason=ALREADY_ACTIVE", adminId, doctorId);
             throw new AppException(ErrorType.USER_ACTIVE);
         }
 
         if (status == AccountStatus.BLOCKED) {
-            log.warn("APPROVE_DOCTOR_FAILED: doctorId={} reason=BLOCKED traceId={}",
-                    doctorId, MDC.get("traceId"));
+            log.warn("admin_action_failed=approve_doctor adminId={} doctorId={} reason=BLOCKED", adminId, doctorId);
             throw new AppException(ErrorType.USER_BLOCKED);
         }
 
         doctor.getUser().setRole(Role.DOCTOR);
         doctor.getUser().setStatus(AccountStatus.ACTIVE);
 
-        log.info("APPROVE_DOCTOR_SUCCESS: doctorId={} traceId={}",
-                doctorId, MDC.get("traceId"));
+        // Explicit save for clarity
+        doctorRepository.save(doctor);
+
+        log.info("admin_action_success=approve_doctor adminId={} doctorId={}", adminId, doctorId);
+
+        // TODO: Add audit log entry here (adminId, action, targetId, entityType)
     }
 
     // ================== BLOCK USER ==================
-
     @Transactional
-    public void blockUser(Long userId) {
-
-        log.info("BLOCK_USER_ATTEMPT: userId={} traceId={}",
-                userId, MDC.get("traceId"));
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND));
-
-        if (user.getStatus() == AccountStatus.BLOCKED) {
-            log.warn("BLOCK_USER_FAILED: userId={} reason=ALREADY_BLOCKED traceId={}",
-                    userId, MDC.get("traceId"));
-            throw new AppException(ErrorType.USER_BLOCKED);
+    public void blockUser(Long adminId, Long userId) {
+        if (adminId.equals(userId)) {
+            throw new AppException(ErrorType.INVALID_OPERATION, "Admin cannot block themselves");
         }
 
-        user.setStatus(AccountStatus.BLOCKED);
+        log.info("admin_action=block_user adminId={} userId={}", adminId, userId);
 
-        log.info("BLOCK_USER_SUCCESS: userId={} traceId={}",
-                userId, MDC.get("traceId"));
+        changeUserStatus(adminId, userId, AccountStatus.BLOCKED, "block");
     }
 
     // ================== UNBLOCK USER ==================
-
     @Transactional
-    public void unblockUser(Long userId) {
+    public void unblockUser(Long adminId, Long userId) {
+        log.info("admin_action=unblock_user adminId={} userId={}", adminId, userId);
 
-        log.info("UNBLOCK_USER_ATTEMPT: userId={} traceId={}",
-                userId, MDC.get("traceId"));
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND));
-
-        if (user.getStatus() == AccountStatus.ACTIVE) {
-            log.warn("UNBLOCK_USER_FAILED: userId={} reason=ALREADY_ACTIVE traceId={}",
-                    userId, MDC.get("traceId"));
-            throw new AppException(ErrorType.USER_ACTIVE);
-        }
-
-        if (user.getStatus() != AccountStatus.BLOCKED) {
-            log.warn("UNBLOCK_USER_FAILED: userId={} reason=INVALID_STATUS traceId={}",
-                    userId, MDC.get("traceId"));
-            throw new AppException(ErrorType.USER_INVALID_STATUS);
-        }
-
-        user.setStatus(AccountStatus.ACTIVE);
-
-        log.info("UNBLOCK_USER_SUCCESS: userId={} traceId={}",
-                userId, MDC.get("traceId"));
+        changeUserStatus(adminId, userId, AccountStatus.ACTIVE, "unblock");
     }
 
     // ================== GET PATIENTS ==================
-
     @Transactional(readOnly = true)
     public Page<PatientSummary> getAllPatients(int page, int size) {
+        log.debug("admin_query=get_all_patients page={} size={}", page, size);
 
-        log.debug("GET_PATIENTS_QUERY: page={} size={} traceId={}",
-                page, size, MDC.get("traceId"));
-
-        PageRequest pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, USER_CREATED_AT));
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, USER_CREATED_AT));
 
         Page<PatientSummary> result = userRepository.findByRole(Role.PATIENT, pageable)
                 .map(AdminService::mapToPatientResponse);
 
-        log.debug("GET_PATIENTS_RESULT: count={} traceId={}",
-                result.getNumberOfElements(), MDC.get("traceId"));
-
+        log.debug("admin_query_result=get_all_patients count={}", result.getNumberOfElements());
         return result;
     }
 
     // ================== GET DOCTORS ==================
-
     @Transactional(readOnly = true)
     public Page<DoctorResponse> getAllDoctors(int page, int size) {
+        log.debug("admin_query=get_all_doctors page={} size={}", page, size);
 
-        log.debug("GET_DOCTORS_QUERY: page={} size={} traceId={}",
-                page, size, MDC.get("traceId"));
-
-        PageRequest pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, DOCTOR_USER_CREATED_AT));
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, DOCTOR_USER_CREATED_AT));
 
         Page<DoctorResponse> result = doctorRepository.findAll(pageable)
                 .map(AdminService::mapToDoctorResponse);
 
-        log.debug("GET_DOCTORS_RESULT: count={} traceId={}",
-                result.getNumberOfElements(), MDC.get("traceId"));
-
+        log.debug("admin_query_result=get_all_doctors count={}", result.getNumberOfElements());
         return result;
     }
 
-    // ================== MAPPERS ==================
+    // ================== PRIVATE HELPER ==================
+    /**
+     * Generic method to change user status with concurrency safety
+     */
+    private void changeUserStatus(Long adminId, Long userId, AccountStatus targetStatus, String action) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND));
 
+        if (targetStatus == AccountStatus.BLOCKED) {
+            if (user.getStatus() == AccountStatus.BLOCKED) {
+                log.warn("admin_action_failed={} adminId={} userId={} reason=ALREADY_BLOCKED", action, adminId, userId);
+                throw new AppException(ErrorType.USER_BLOCKED);
+            }
+        } else if (targetStatus == AccountStatus.ACTIVE) {
+            if (user.getStatus() == AccountStatus.ACTIVE) {
+                log.warn("admin_action_failed={} adminId={} userId={} reason=ALREADY_ACTIVE", action, adminId, userId);
+                throw new AppException(ErrorType.USER_ACTIVE);
+            }
+            if (user.getStatus() != AccountStatus.BLOCKED) {
+                log.warn("admin_action_failed={} adminId={} userId={} reason=INVALID_STATUS", action, adminId, userId);
+                throw new AppException(ErrorType.USER_INVALID_STATUS);
+            }
+        }
+
+        user.setStatus(targetStatus);
+        userRepository.save(user);
+
+        log.info("admin_action_success={} adminId={} userId={} newStatus={}", action, adminId, userId, targetStatus);
+        // TODO: Add audit log entry here
+    }
+
+    // ================== MAPPERS ==================
     private static DoctorResponse mapToDoctorResponse(Doctor doctor) {
         return new DoctorResponse(
                 doctor.getUserId(),

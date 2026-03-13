@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @AutoConfigureMockMvc(addFilters = false)
-public class UserControllerIntegrationTests extends TestContainersConfig {
+public class UserControllerIT extends TestContainersConfig {
 
     @Autowired
     private MockMvc mockMvc;

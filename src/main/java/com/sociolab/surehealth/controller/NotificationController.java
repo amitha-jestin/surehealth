@@ -7,11 +7,11 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
+import com.sociolab.surehealth.security.SecurityUtil;
+import com.sociolab.surehealth.logging.LogUtil;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -34,18 +34,18 @@ public class NotificationController {
     @GetMapping("/unread")
     public ResponseEntity<PagedResponse<NotificationResponse>> getUnreadNotifications(
             @Min(0) @RequestParam(defaultValue = "0") int page,
-            @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size,
-            Authentication authentication
+            @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size
     ) {
-        String email = authentication.getName();
-        log.debug("NOTIFICATION_QUERY: unreadNotifications email={} page={} size={} traceId={}",
-                email, page, size, MDC.get("traceId"));
+        String email = SecurityUtil.getCurrentUserEmail();
+        String masked = LogUtil.maskEmail(email);
+        log.debug("NOTIFICATION_QUERY: unreadNotifications email={} page={} size={}",
+                masked, page, size);
 
         Page<NotificationResponse> response =
                 notificationService.getUnreadNotificationsForCurrentUser(email, page, size);
 
-        log.debug("NOTIFICATION_QUERY_SUCCESS: unreadNotifications email={} resultCount={} traceId={}",
-                email, response.getNumberOfElements(), MDC.get("traceId"));
+        log.debug("NOTIFICATION_QUERY_SUCCESS: unreadNotifications email={} resultCount={}",
+                masked, response.getNumberOfElements());
 
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
@@ -58,18 +58,18 @@ public class NotificationController {
     @GetMapping("/read")
     public ResponseEntity<PagedResponse<NotificationResponse>> getReadNotifications(
             @Min(0) @RequestParam(defaultValue = "0") int page,
-            @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size,
-            Authentication authentication
+            @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size
     ) {
-        String email = authentication.getName();
-        log.debug("NOTIFICATION_QUERY: readNotifications email={} page={} size={} traceId={}",
-                email, page, size, MDC.get("traceId"));
+        String email = SecurityUtil.getCurrentUserEmail();
+        String masked = LogUtil.maskEmail(email);
+        log.debug("NOTIFICATION_QUERY: readNotifications email={} page={} size={}",
+                masked, page, size);
 
         Page<NotificationResponse> response =
                 notificationService.getReadNotificationsForCurrentUser(email, page, size);
 
-        log.debug("NOTIFICATION_QUERY_SUCCESS: readNotifications email={} resultCount={} traceId={}",
-                email, response.getNumberOfElements(), MDC.get("traceId"));
+        log.debug("NOTIFICATION_QUERY_SUCCESS: readNotifications email={} resultCount={}",
+                masked, response.getNumberOfElements());
 
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }

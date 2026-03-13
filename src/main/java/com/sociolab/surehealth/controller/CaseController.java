@@ -1,12 +1,15 @@
 package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
+import com.sociolab.surehealth.logging.LogUtil;
+import com.sociolab.surehealth.security.SecurityUtil;
 import com.sociolab.surehealth.service.CaseService;
 import com.sociolab.surehealth.service.DocumentService;
 import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -44,16 +47,15 @@ public class CaseController {
     @PostMapping
     @PreAuthorize("hasRole('PATIENT')")
     public ResponseEntity<BaseResponse<CaseResponse>> submitCase(
-            @Valid @RequestBody CaseRequest request,
-            Authentication authentication
+            @Valid @RequestBody CaseRequest request
     ) {
-        String email = authentication.getName();
-        log.info("CASE_SUBMIT_ATTEMPT: patient={} traceId={}", email, MDC.get("traceId"));
+        String email = SecurityUtil.getCurrentUserEmail();
+        log.info("CASE_SUBMIT_ATTEMPT: patient={} ", LogUtil.maskEmail(email));
 
         CaseResponse response = caseService.submitCase(email, request);
 
-        log.info("CASE_SUBMIT_SUCCESS: patient={} caseId={} traceId={}",
-                email, response.caseId(), MDC.get("traceId"));
+        log.info("CASE_SUBMIT_SUCCESS: patient={} caseId={}",
+                LogUtil.maskEmail(email), response.caseId());
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ResponseUtil.success(response));
@@ -70,17 +72,17 @@ public class CaseController {
     @PreAuthorize("hasRole('PATIENT')")
     public ResponseEntity<PagedResponse<DocumentResponse>> uploadDocument(
             @PathVariable Long caseId,
-            @RequestParam("files") List<MultipartFile> files,
-            Authentication authentication
+            @RequestParam("files") @Size(max = 5) List<MultipartFile> files
     ) {
-        String email = authentication.getName();
-        log.info("DOCUMENT_UPLOAD_ATTEMPT: patient={} caseId={} fileCount={} traceId={}",
-                email, caseId, files.size(), MDC.get("traceId"));
+
+        String email = SecurityUtil.getCurrentUserEmail();
+        log.info("DOCUMENT_UPLOAD_ATTEMPT: patient={} caseId={} fileCount={}",
+                LogUtil.maskEmail(email), caseId, files.size());
 
         Page<DocumentResponse> response = documentService.uploadDocuments(caseId, email, files);
 
-        log.info("DOCUMENT_UPLOAD_SUCCESS: patient={} caseId={} uploadedCount={} traceId={}",
-                email, caseId, response.getNumberOfElements(), MDC.get("traceId"));
+        log.info("DOCUMENT_UPLOAD_SUCCESS: patient={} caseId={} uploadedCount={} ",
+                LogUtil.maskEmail(email), caseId, response.getNumberOfElements());
 
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
@@ -97,12 +99,11 @@ public class CaseController {
     public ResponseEntity<PagedResponse<DocumentResponse>> getCaseDocuments(
             @PathVariable Long caseId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-            Authentication authentication
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        String email = authentication.getName();
-        log.debug("CASE_DOC_QUERY: user={} caseId={} page={} size={} traceId={}",
-                email, caseId, page, size, MDC.get("traceId"));
+        String email = SecurityUtil.getCurrentUserEmail();
+        log.debug("CASE_DOC_QUERY: user={} caseId={} page={} size={}",
+                LogUtil.maskEmail(email), caseId, page, size);
 
         Page<DocumentResponse> response = documentService.getDocumentsForCase(caseId, email, page, size);
 
@@ -119,15 +120,14 @@ public class CaseController {
     @PatchMapping("/{caseId}/accept")
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<BaseResponse<CaseResponse>> acceptCase(
-            @PathVariable Long caseId,
-            Authentication authentication
+            @PathVariable Long caseId
     ) {
-        String email = authentication.getName();
-        log.info("CASE_ACCEPT_ATTEMPT: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+        String email = SecurityUtil.getCurrentUserEmail();
+        log.info("CASE_ACCEPT_ATTEMPT: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
 
         CaseResponse response = caseService.acceptCase(caseId, email);
 
-        log.info("CASE_ACCEPT_SUCCESS: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+        log.info("CASE_ACCEPT_SUCCESS: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
 
         return ResponseEntity.ok(ResponseUtil.success(response));
     }
@@ -142,15 +142,14 @@ public class CaseController {
     @PatchMapping("/{caseId}/reject")
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<BaseResponse<CaseResponse>> rejectCase(
-            @PathVariable Long caseId,
-            Authentication authentication
+            @PathVariable Long caseId
     ) {
-        String email = authentication.getName();
-        log.info("CASE_REJECT_ATTEMPT: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+        String email = SecurityUtil.getCurrentUserEmail();
+        log.info("CASE_REJECT_ATTEMPT: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
 
         CaseResponse response = caseService.rejectCase(caseId, email);
 
-        log.info("CASE_REJECT_SUCCESS: doctor={} caseId={} traceId={}", email, caseId, MDC.get("traceId"));
+        log.info("CASE_REJECT_SUCCESS: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
 
         return ResponseEntity.ok(ResponseUtil.success(response));
     }
@@ -163,12 +162,11 @@ public class CaseController {
     @GetMapping("/my")
     @PreAuthorize("hasRole('PATIENT') or hasRole('DOCTOR')")
     public ResponseEntity<PagedResponse<CaseResponse>> getMyCases(
-            Authentication authentication,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        String email = authentication.getName();
-        log.debug("MY_CASES_QUERY: user={} page={} size={} traceId={}", email, page, size, MDC.get("traceId"));
+        String email = SecurityUtil.getCurrentUserEmail();
+        log.debug("MY_CASES_QUERY: user={} page={} size={}", LogUtil.maskEmail(email), page, size);
 
         Page<CaseResponse> pagedCases = caseService.getMyCases(email, page, size);
 

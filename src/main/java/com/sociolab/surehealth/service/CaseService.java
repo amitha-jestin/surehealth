@@ -5,6 +5,7 @@ import com.sociolab.surehealth.dto.CaseRequest;
 import com.sociolab.surehealth.dto.CaseResponse;
 import com.sociolab.surehealth.enums.*;
 import com.sociolab.surehealth.exception.custom.AppException;
+import com.sociolab.surehealth.logging.LogUtil;
 import com.sociolab.surehealth.model.Doctor;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.User;
@@ -14,6 +15,7 @@ import com.sociolab.surehealth.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -30,24 +32,25 @@ public class CaseService {
     private final MedicalCaseRepository caseRepository;
     private final UserRepository userRepository;
     private final DoctorRepository doctorRepository;
-    private final KafkaNotificationProducer kafkaProducer;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ================= SUBMIT CASE =================
     @Transactional
     public CaseResponse submitCase(String patientEmail, CaseRequest request) {
 
+        String maskedPatient = LogUtil.maskEmail(patientEmail);
         log.info("Submitting case title='{}' patientEmail={} doctorId={}",
-                request.getTitle(), patientEmail, request.getDoctorId());
+                request.getTitle(), maskedPatient, request.getDoctorId());
 
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> {
-                    log.warn("Case submission failed - patient not found email={}", patientEmail);
+                    log.warn("Case submission failed - patient not found email={}", maskedPatient);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 
         Doctor doctor = doctorRepository.findByUserId(request.getDoctorId())
                 .orElseThrow(() -> {
-                    log.warn("Case submission failed - doctor not found doctorId={}",
+                    log.warn("Case submission failed - doctor not found doctorId={} ",
                             request.getDoctorId());
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
@@ -69,13 +72,14 @@ public class CaseService {
         log.info("Case created successfully caseId={} patientId={} doctorId={}",
                 savedCase.getId(), patient.getId(), doctor.getUser().getId());
 
-        kafkaProducer.sendEvent(new CaseNotificationEvent(
+        // publish application event so delivery is handled by listeners (e.g. Kafka forwarder)
+        eventPublisher.publishEvent(new CaseNotificationEvent(
                 doctor.getUser().getId(),
                 "New case assigned: " + request.getTitle(),
                 NotificationEventType.CASE_ASSIGNED
         ));
 
-        log.debug("Kafka event sent for case assignment caseId={}", savedCase.getId());
+        log.debug("Event published for case assignment caseId={}", savedCase.getId());
 
         return mapToResponse(savedCase);
     }
@@ -84,8 +88,9 @@ public class CaseService {
     @Transactional
     public CaseResponse acceptCase(Long caseId, String doctorEmail) {
 
+        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
         log.info("Doctor attempting to accept case caseId={} doctorEmail={}",
-                caseId, doctorEmail);
+                caseId, maskedDoctor);
 
         MedicalCase medicalCase = getCaseForDoctorAction(caseId, doctorEmail);
         medicalCase.setStatus(CaseStatus.ACCEPTED);
@@ -93,13 +98,13 @@ public class CaseService {
         log.info("Case accepted caseId={} doctorId={}",
                 caseId, medicalCase.getDoctorId());
 
-        kafkaProducer.sendEvent(new CaseNotificationEvent(
+        eventPublisher.publishEvent(new CaseNotificationEvent(
                 medicalCase.getPatientId(),
                 "Doctor accepted your case",
                 NotificationEventType.CASE_ACCEPTED
         ));
 
-        log.debug("Kafka event sent for case acceptance caseId={}", caseId);
+        log.debug("Event published for case acceptance caseId={}", caseId);
 
         return mapToResponse(medicalCase);
     }
@@ -108,8 +113,9 @@ public class CaseService {
     @Transactional
     public CaseResponse rejectCase(Long caseId, String doctorEmail) {
 
+        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
         log.info("Doctor attempting to reject case caseId={} doctorEmail={}",
-                caseId, doctorEmail);
+                caseId, maskedDoctor);
 
         MedicalCase medicalCase = getCaseForDoctorAction(caseId, doctorEmail);
         medicalCase.setStatus(CaseStatus.REJECTED);
@@ -117,13 +123,13 @@ public class CaseService {
         log.info("Case rejected caseId={} doctorId={}",
                 caseId, medicalCase.getDoctorId());
 
-        kafkaProducer.sendEvent(new CaseNotificationEvent(
+        eventPublisher.publishEvent(new CaseNotificationEvent(
                 medicalCase.getPatientId(),
                 "Doctor rejected your case",
                 NotificationEventType.CASE_REJECTED
         ));
 
-        log.debug("Kafka event sent for case rejection caseId={}", caseId);
+        log.debug("Event published for case rejection caseId={}", caseId);
 
         return mapToResponse(medicalCase);
     }
@@ -131,11 +137,12 @@ public class CaseService {
     // ================= GET MY CASES =================
     public Page<CaseResponse> getMyCases(String email, int page, int size) {
 
-        log.debug("Fetching cases email={} page={} size={}", email, page, size);
+        String masked = LogUtil.maskEmail(email);
+        log.debug("Fetching cases email={} page={} size={}", masked, page, size);
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    log.warn("Get cases failed - user not found email={}", email);
+                    log.warn("Get cases failed - user not found email={}", masked);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 
@@ -168,9 +175,10 @@ public class CaseService {
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 
+        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
         User user = userRepository.findByEmail(doctorEmail)
                 .orElseThrow(() -> {
-                    log.warn("Doctor user not found email={}", doctorEmail);
+                    log.warn("Doctor user not found email={}", maskedDoctor);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 

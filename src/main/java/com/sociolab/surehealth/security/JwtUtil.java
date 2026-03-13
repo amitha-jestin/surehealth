@@ -1,6 +1,8 @@
 package com.sociolab.surehealth.security;
 
+import com.sociolab.surehealth.enums.ErrorType;
 import com.sociolab.surehealth.enums.Role;
+import com.sociolab.surehealth.exception.custom.JwtAuthenticationException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -100,5 +102,28 @@ public class JwtUtil {
         long now = System.currentTimeMillis();
         long expiryTime = expiration.getTime();
         return Math.max(0, (expiryTime - now) / 1000);
+    }
+
+    public Role parseRole(String role) {
+        try {
+            return Role.valueOf(role.toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new JwtAuthenticationException(
+                    ErrorType.JWT_INVALID_TOKEN,
+                    "Invalid role in JWT token"
+            );
+        }
+
+    }
+
+    public void validateRefreshToken(String refreshToken) {
+        try {
+            extractAllClaims(refreshToken);
+        } catch (Exception e) {
+            throw new JwtAuthenticationException(
+                    ErrorType.JWT_INVALID_TOKEN,
+                    "Invalid or expired refresh token"
+            );
+        }
     }
 }

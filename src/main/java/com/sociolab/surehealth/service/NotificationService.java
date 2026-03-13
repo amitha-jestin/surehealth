@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import com.sociolab.surehealth.logging.LogUtil;
 
 @Service
 @RequiredArgsConstructor
@@ -54,11 +55,12 @@ public class NotificationService {
 
     // ================= GET READ NOTIFICATIONS (PAGED) =================
     public Page<NotificationResponse> getReadNotificationsForCurrentUser(String email, int page, int size) {
-        log.debug("Fetching read notifications email={} page={} size={}", email, page, size);
+        String masked = LogUtil.maskEmail(email);
+        log.debug("Fetching read notifications email={} page={} size={}", masked, page, size);
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    log.warn("User not found for fetching read notifications email={}", email);
+                    log.warn("User not found for fetching read notifications email={}", masked);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
@@ -67,18 +69,19 @@ public class NotificationService {
         Page<Notification> notifications =
                 notificationRepository.findByUserIdAndReadStatus(user.getId(), true, pageable);
 
-        log.debug("Read notifications fetched email={} total={}", email, notifications.getTotalElements());
+        log.debug("Read notifications fetched email={} total={}", masked, notifications.getTotalElements());
 
         return notifications.map(this::mapToResponse);
     }
 
     // ================= GET UNREAD NOTIFICATIONS (PAGED) =================
     public Page<NotificationResponse> getUnreadNotificationsForCurrentUser(String email, int page, int size) {
-        log.debug("Fetching unread notifications email={} page={} size={}", email, page, size);
+        String masked = LogUtil.maskEmail(email);
+        log.debug("Fetching unread notifications email={} page={} size={}", masked, page, size);
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    log.warn("User not found for fetching unread notifications email={}", email);
+                    log.warn("User not found for fetching unread notifications email={}", masked);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
@@ -87,7 +90,7 @@ public class NotificationService {
         Page<Notification> notifications =
                 notificationRepository.findByUserIdAndReadStatus(user.getId(), false, pageable);
 
-        log.debug("Unread notifications fetched email={} total={}", email, notifications.getTotalElements());
+        log.debug("Unread notifications fetched email={} total={}", masked, notifications.getTotalElements());
 
         return notifications.map(this::mapToResponse);
     }

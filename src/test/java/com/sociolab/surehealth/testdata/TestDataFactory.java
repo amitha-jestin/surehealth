@@ -37,7 +37,7 @@ public class TestDataFactory {
         User user = UserBuilder.aUser()
                 .withRole(Role.ADMIN)
                 .withPassword(rawPassword == null ? "Admin@1pass" : rawPassword)
-                .withEmail("admin@example.com")
+                .withEmail("admin" + UUID.randomUUID() +" @example.com")
                 .withName("Admin User")
                 .build();
         user.setPassword(passwordEncoder.encode(user.getPassword()));

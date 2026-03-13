@@ -60,8 +60,8 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**"
                         ).permitAll()
-                        .requestMatchers("/api/patient/**").hasRole("PATIENT")
-                        .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
+                        .requestMatchers("/api/v1/patient/**").hasRole("PATIENT")
+                        .requestMatchers("/api/v1/doctor/**").hasRole("DOCTOR")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 );

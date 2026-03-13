@@ -7,8 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -27,11 +27,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AppException.class)
     public ProblemDetail handleAppException(AppException ex, HttpServletRequest request) {
 
-        log.warn("BUSINESS_EXCEPTION: type={} message={} path={} traceId={}",
+        log.warn("BUSINESS_EXCEPTION: type={} message={} path={}",
                 ex.getErrorType(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                MDC.get("traceId"));
+                request.getRequestURI());
 
         return problemDetailFactory.fromAppException(ex, request.getRequestURI());
     }
@@ -51,10 +50,9 @@ public class GlobalExceptionHandler {
                 ? "Validation failed"
                 : String.join("; ", errors);
 
-        log.warn("VALIDATION_EXCEPTION: message={} path={} traceId={}",
+        log.warn("VALIDATION_EXCEPTION: message={} path={}",
                 message,
-                request.getRequestURI(),
-                MDC.get("traceId"));
+                request.getRequestURI());
 
         return ProblemDetailFactory.builder()
                 .errorType(ErrorType.VALIDATION_ERROR)
@@ -72,10 +70,9 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleConstraint(ConstraintViolationException ex,
                                           HttpServletRequest request) {
 
-        log.warn("CONSTRAINT_EXCEPTION: message={} path={} traceId={}",
+        log.warn("CONSTRAINT_EXCEPTION: message={} path={}",
                 ex.getMessage(),
-                request.getRequestURI(),
-                MDC.get("traceId"));
+                request.getRequestURI());
 
         return ProblemDetailFactory.builder()
                 .errorType(ErrorType.VALIDATION_ERROR)
@@ -88,14 +85,32 @@ public class GlobalExceptionHandler {
                 .build();
     }
 
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ProblemDetail handleAuthorizationDenied(
+            Exception ex,
+            HttpServletRequest request) {
+        log.warn("AUTHORIZATION_DENIED_EXCEPTION: message={} path={}",
+                ex.getMessage(),
+                request.getRequestURI());
+
+        return ProblemDetailFactory.builder()
+                .errorType(ErrorType.ACCESS_DENIED)
+                .title(ErrorType.ACCESS_DENIED.name())
+                .detail(ex.getMessage())
+                .path(request.getRequestURI())
+                .baseUri(problemDetailFactory.getBaseUri())
+                .apiVersion(problemDetailFactory.getApiVersion())
+                .clock(problemDetailFactory.getClock())
+                .build();
+    }
+
     // ===== Fallback / Internal Server Error =====
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGeneric(Exception ex, HttpServletRequest request) {
 
-        log.error("UNEXPECTED_EXCEPTION: message={} path={} traceId={}",
+        log.error("UNEXPECTED_EXCEPTION: message={} path={}",
                 ex.getMessage(),
                 request.getRequestURI(),
-                MDC.get("traceId"),
                 ex);
 
         return ProblemDetailFactory.builder()

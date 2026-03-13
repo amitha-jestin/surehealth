@@ -14,6 +14,7 @@ import com.sociolab.surehealth.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.sociolab.surehealth.logging.LogUtil;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -27,7 +28,8 @@ public class OpinionService {
 
     @Transactional
     public OpinionResponse submitOpinion(Long caseId, String doctorEmail, OpinionRequest request) {
-        log.info("Submitting opinion for caseId={} by doctorEmail={}", caseId, doctorEmail);
+        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
+        log.info("Submitting opinion for caseId={} by doctorEmail={}", caseId, maskedDoctor);
 
         // 1. Fetch case
         MedicalCase medicalCase = caseRepository.findById(caseId)
@@ -46,7 +48,7 @@ public class OpinionService {
         // 3. Fetch doctor
         User doctor = userRepository.findByEmail(doctorEmail)
                 .orElseThrow(() -> {
-                    log.warn("Doctor not found email={}", doctorEmail);
+                    log.warn("Doctor not found email={}", maskedDoctor);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Doctor not found");
                 });
 
@@ -73,8 +75,8 @@ public class OpinionService {
         // 7. Return response DTO
         return new OpinionResponse(
                 savedOpinion.getId(),
-                medicalCase.getId(),
                 doctor.getId(),
+                medicalCase.getId(),
                 savedOpinion.getComment()
         );
     }

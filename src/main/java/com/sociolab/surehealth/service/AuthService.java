@@ -9,6 +9,8 @@ import com.sociolab.surehealth.logging.LogUtil;
 import com.sociolab.surehealth.model.User;
 import com.sociolab.surehealth.repository.UserRepository;
 import com.sociolab.surehealth.security.JwtUtil;
+import com.sociolab.surehealth.security.SecurityUtil;
+import com.sociolab.surehealth.security.UserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,13 +77,15 @@ public class AuthService {
     }
 
     // ================= LOGOUT =================
-    public void logout(HttpServletRequest request) {
+    public void logout() {
 
-        String token = extractToken(request);
+        UserPrincipal principal = SecurityUtil.getCurrentUser();
+        Long userId = principal.userId();
+
+        String token = principal.accessToken();
 
         if (token != null) {
 
-            Long userId = jwtUtil.extractUserIdFromAccessToken(token);
 
             // calculate remaining token expiration
             long expiry = jwtUtil.getRemainingExpiration(token);
@@ -106,7 +110,12 @@ public class AuthService {
             log.warn("Refresh token is missing");
             throw new AppException(ErrorType.INVALID_CREDENTIALS, "Refresh token is required");
         }
-
+        try {
+            jwtUtil.validateRefreshToken(refreshToken);
+        } catch (Exception e) {
+            log.warn("Invalid refresh token: {}", e.getMessage());
+            throw new AppException(ErrorType.INVALID_CREDENTIALS, "Refresh token invalid or expired");
+        }
         Long userId = jwtUtil.extractUserId(refreshToken);
 
         String storedToken = redisService.getRefreshToken(userId);

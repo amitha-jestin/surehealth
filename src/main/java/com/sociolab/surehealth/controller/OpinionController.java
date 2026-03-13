@@ -2,15 +2,15 @@ package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
 import com.sociolab.surehealth.service.OpinionService;
+import com.sociolab.surehealth.security.SecurityUtil;
+import com.sociolab.surehealth.logging.LogUtil;
 import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -35,16 +35,16 @@ public class OpinionController {
     @PostMapping("/{caseId}")
     public ResponseEntity<BaseResponse<OpinionResponse>> submitOpinion(
             @PathVariable Long caseId,
-            @RequestBody @Valid OpinionRequest opinionRequest,
-            Authentication authentication
+            @RequestBody @Valid OpinionRequest opinionRequest
     ) {
-        String doctorEmail = authentication.getName();
-        log.info("OPINION_SUBMIT_ATTEMPT: doctor={} caseId={} traceId={}", doctorEmail, caseId, MDC.get("traceId"));
+        String doctorEmail = SecurityUtil.getCurrentUserEmail();
+        String masked = LogUtil.maskEmail(doctorEmail);
+        log.info("OPINION_SUBMIT_ATTEMPT: doctor={} caseId={}", masked, caseId);
 
         OpinionResponse response = opinionService.submitOpinion(caseId, doctorEmail, opinionRequest);
 
-        log.info("OPINION_SUBMIT_SUCCESS: doctor={} caseId={} opinionId={} traceId={}",
-                doctorEmail, caseId, response.id(), MDC.get("traceId"));
+        log.info("OPINION_SUBMIT_SUCCESS: doctor={} caseId={} opinionId={}",
+                masked, caseId, response.id());
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ResponseUtil.success(response));

@@ -8,7 +8,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -39,11 +38,10 @@ public class JwtAuthEntryPoint implements AuthenticationEntryPoint {
 
         // ✅ LOG HERE (before building response)
         log.warn(
-                "AUTH_FAILED path={} errorType={} message={} traceId={}",
+                "AUTH_FAILED path={} errorType={} message={}",
                 request.getRequestURI(),
                 errorType,
-                detailMessage,
-                MDC.get("traceId")
+                detailMessage
         );
 
         ProblemDetail problemDetail = ProblemDetailFactory.builder()

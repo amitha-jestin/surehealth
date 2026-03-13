@@ -31,15 +31,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-
-        return path.startsWith("/api/v1/auth/")  // your auth endpoints
-                || path.startsWith("/ws")       // websocket endpoints
-                || path.startsWith("/v3/api-docs") // OpenAPI JSON
-                || path.startsWith("/swagger-ui") // Swagger UI static content
-                || path.startsWith("/swagger-ui.html") // legacy Swagger UI path
-                || path.startsWith("/swagger-resources") // Swagger resources
-                || path.startsWith("/webjars"); // Swagger static assets
+        return path.startsWith("/api/v1/auth/")   // auth endpoints
+                || path.startsWith("/ws")         // websocket endpoints
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/swagger-ui")
+                || path.startsWith("/swagger-ui.html")
+                || path.startsWith("/swagger-resources")
+                || path.startsWith("/webjars");
     }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -56,8 +56,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
 
         try {
-
-            // Blacklist check
+            // Check if token is blacklisted
             if (redisService.isTokenBlacklisted(token)) {
                 log.warn("JWT_BLACKLISTED path={}", request.getRequestURI());
                 throw new JwtAuthenticationException(
@@ -72,13 +71,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // Validate & parse JWT
+            // Parse and validate token
             Claims claims = jwtUtil.extractAllClaims(token);
 
+            Long userId = claims.get("id", Long.class); // extract userId
             String email = claims.getSubject();
             String role = claims.get("role", String.class);
 
-            if (email == null || role == null) {
+            if (userId == null || email == null || role == null) {
                 log.warn("JWT_INVALID_CLAIMS path={}", request.getRequestURI());
                 throw new JwtAuthenticationException(
                         ErrorType.JWT_INVALID_TOKEN,
@@ -86,36 +86,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 );
             }
 
-            var authorities = List.of(
-                    new SimpleGrantedAuthority("ROLE_" + role)
-            );
+            // Create UserPrincipal for SecurityContext
+            UserPrincipal principal = new UserPrincipal(userId, email, jwtUtil.parseRole(role), token);
 
-            var authentication = new UsernamePasswordAuthenticationToken(
-                    email,
-                    null,
-                    authorities
-            );
+            var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+            var authentication = new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            log.debug("JWT_AUTH_SUCCESS user={} path={}", email, request.getRequestURI());
+            log.debug("JWT_AUTH_SUCCESS userId={} path={}", userId, request.getRequestURI());
 
             filterChain.doFilter(request, response);
 
         } catch (JwtException ex) {
-
-            //  Do NOT log full stacktrace for common JWT failures
-            log.warn("JWT_INVALID path={} message={}",
-                    request.getRequestURI(),
-                    ex.getMessage());
-
+            log.warn("JWT_INVALID path={} message={}", request.getRequestURI(), ex.getMessage());
             throw new JwtAuthenticationException(
                     ErrorType.JWT_INVALID_TOKEN,
                     "Invalid or expired token"
             );
         } catch (Exception ex) {
-
-            //Only unexpected system errors should be ERROR
             log.error("JWT_PROCESSING_ERROR path={}", request.getRequestURI(), ex);
             throw ex;
         }

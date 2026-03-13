@@ -46,11 +46,10 @@ public class AuthController {
 
     // ================== LOGOUT ==================
     @PostMapping("/logout")
-    public ResponseEntity<BaseResponse<Void>> logout(HttpServletRequest request) {
-
+    public ResponseEntity<BaseResponse<Void>> logout(){
         log.info("AUTH_ATTEMPT: logout");
 
-        authService.logout(request);
+        authService.logout();
 
         log.info("AUTH_SUCCESS: logout");
 

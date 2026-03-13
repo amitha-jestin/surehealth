@@ -3,6 +3,7 @@ package com.sociolab.surehealth.service;
 import com.sociolab.surehealth.dto.DocumentResponse;
 import com.sociolab.surehealth.enums.ErrorType;
 import com.sociolab.surehealth.exception.custom.AppException;
+import com.sociolab.surehealth.logging.LogUtil;
 import com.sociolab.surehealth.model.MedicalCase;
 import com.sociolab.surehealth.model.MedicalDocument;
 import com.sociolab.surehealth.model.User;
@@ -41,8 +42,11 @@ public class DocumentService {
     @Transactional
     public Page<DocumentResponse> uploadDocuments(Long caseId, String email, List<MultipartFile> files) {
 
+        if(files.isEmpty()){
+            throw new AppException(ErrorType.RESOURCE_NOT_FOUND, "No files uploaded");
+        }
         log.info("Document upload attempt caseId={} userEmail={} fileCount={}",
-                caseId, email, files.size());
+                caseId, LogUtil.maskEmail(email), files.size());
 
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> {
@@ -52,7 +56,7 @@ public class DocumentService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    log.warn("Upload failed - user not found email={}", email);
+                    log.warn("Upload failed - user not found email={}", LogUtil.maskEmail(email));
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
@@ -62,6 +66,8 @@ public class DocumentService {
             throw new AppException(ErrorType.ACCESS_DENIED,
                     "You are not allowed to upload documents for this case");
         }
+
+
 
         List<MedicalDocument> savedDocs = files.stream()
                 .map(file -> saveFile(file, medicalCase))
@@ -80,7 +86,7 @@ public class DocumentService {
     public Page<DocumentResponse> getDocumentsForCase(Long caseId, String email, int page, int size) {
 
         log.debug("Fetching documents caseId={} email={} page={} size={}",
-                caseId, email, page, size);
+                caseId, LogUtil.maskEmail(email), page, size);
 
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> {
@@ -90,7 +96,7 @@ public class DocumentService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    log.warn("Document fetch failed - user not found email={}", email);
+                    log.warn("Document fetch failed - user not found email={}", LogUtil.maskEmail(email));
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
