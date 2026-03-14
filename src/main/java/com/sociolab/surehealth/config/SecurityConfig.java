@@ -52,8 +52,11 @@ public class SecurityConfig {
                 // Authorization
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/v1/auth/**",
-                                "/api/v1/register/**",
+                                "/api/v1/auth/login",
+                                "/api/v1/auth/refresh",
+                                "/ws",
+                                "/ws/**",
+                                "/api/v1/users/register/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
@@ -77,3 +80,5 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
+
+

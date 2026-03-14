@@ -22,8 +22,13 @@ public class MedicalCase {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long patientId;
-    private Long doctorId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "patient_id")
+    private User patient;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "doctor_id")
+    private User doctor;
     private String title;
     private String description;
     @Enumerated(EnumType.STRING)
@@ -33,7 +38,6 @@ public class MedicalCase {
 
     @OneToMany(mappedBy = "medicalCase", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MedicalDocument> documents = new ArrayList<>();
-
 
     @Enumerated(EnumType.STRING)
     private CaseStatus status; // SUBMITTED / REVIEWED

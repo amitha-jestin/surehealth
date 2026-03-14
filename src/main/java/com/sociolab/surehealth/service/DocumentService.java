@@ -24,12 +24,16 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.Set;
+import java.nio.file.StandardCopyOption;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class DocumentService {
+
+    private static final long MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("application/pdf", "image/jpeg", "image/png");
 
     private final MedicalCaseRepository caseRepository;
     private final UserRepository userRepository;
@@ -60,7 +64,7 @@ public class DocumentService {
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
-        if (!medicalCase.getPatientId().equals(user.getId())) {
+        if (!medicalCase.getPatient().getId().equals(user.getId())) {
             log.warn("Unauthorized document upload attempt caseId={} userId={}",
                     caseId, user.getId());
             throw new AppException(ErrorType.ACCESS_DENIED,
@@ -100,8 +104,8 @@ public class DocumentService {
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
-        if (!medicalCase.getPatientId().equals(user.getId()) &&
-                !medicalCase.getDoctorId().equals(user.getId())) {
+        if (!medicalCase.getPatient().getId().equals(user.getId()) &&
+                !medicalCase.getDoctor().getId().equals(user.getId())) {
 
             log.warn("Unauthorized document access caseId={} userId={}",
                     caseId, user.getId());
@@ -112,7 +116,7 @@ public class DocumentService {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("uploadedAt").descending());
         Page<MedicalDocument> documentsPage =
-                documentRepository.findByMedicalCaseId(caseId, pageable);
+                documentRepository.findByMedicalCase_Id(caseId, pageable);
 
         log.debug("Documents fetched caseId={} totalElements={}",
                 caseId, documentsPage.getTotalElements());
@@ -123,12 +127,27 @@ public class DocumentService {
     // ================= SAVE SINGLE FILE =================
     private MedicalDocument saveFile(MultipartFile file, MedicalCase medicalCase) {
 
-        String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+        if (file == null || file.isEmpty()) {
+            throw new AppException(ErrorType.VALIDATION_ERROR, "File is empty");
+        }
+
+        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            throw new AppException(ErrorType.VALIDATION_ERROR, "File exceeds maximum allowed size");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw new AppException(ErrorType.VALIDATION_ERROR, "Unsupported file type");
+        }
+
+
+        String safeOriginalName = sanitizeFileName(file.getOriginalFilename());
+        String fileName = UUID.randomUUID() + "_" + safeOriginalName;
         Path filePath = Paths.get(uploadDir, fileName);
 
         try {
             Files.createDirectories(filePath.getParent());
-            Files.write(filePath, file.getBytes());
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             log.debug("File written to disk generatedFileName={}", fileName);
 
@@ -157,6 +176,15 @@ public class DocumentService {
         return saved;
     }
 
+    private String sanitizeFileName(String originalFileName) {
+        if (originalFileName == null || originalFileName.isBlank()) {
+            return "file";
+        }
+        String baseName = Paths.get(originalFileName).getFileName().toString();
+        String cleaned = baseName.replaceAll("[^a-zA-Z0-9._-]", "_");
+        return cleaned.isBlank() ? "file" : cleaned;
+    }
+
     private DocumentResponse mapToResponse(MedicalDocument doc) {
         return new DocumentResponse(
                 doc.getId(),
@@ -168,3 +196,4 @@ public class DocumentService {
         );
     }
 }
+

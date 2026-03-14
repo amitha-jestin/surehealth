@@ -53,15 +53,15 @@ public class OpinionService {
                 });
 
         // 4. Verify doctor is assigned to the case
-        if (!doctor.getId().equals(medicalCase.getDoctorId())) {
+        if (!doctor.getId().equals(medicalCase.getDoctor().getId())) {
             log.warn("Doctor not assigned to case caseId={} doctorId={}", caseId, doctor.getId());
             throw new AppException(ErrorType.INVALID_OPERATION, "You are not assigned to review this case");
         }
 
         // 5. Create and save opinion
         Opinion opinion = new Opinion();
-        opinion.setCaseId(medicalCase.getId());
-        opinion.setDoctorId(doctor.getId());
+        opinion.setMedicalCase(medicalCase);
+        opinion.setDoctor(doctor);
         opinion.setComment(request.getComment());
 
         Opinion savedOpinion = opinionRepository.save(opinion);

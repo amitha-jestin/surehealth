@@ -9,5 +9,6 @@ import java.util.List;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    Page<Notification> findByUserIdAndReadStatus(Long userId, boolean readStatus, Pageable pageable);
+    // Query by nested property (user id)
+    Page<Notification> findByUser_IdAndReadStatus(Long userId, boolean readStatus, Pageable pageable);
 }

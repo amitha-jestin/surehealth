@@ -7,9 +7,16 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.config.annotation.*;
 
+import com.sociolab.surehealth.security.WebSocketAuthChannelInterceptor;
+import org.springframework.messaging.simp.config.ChannelRegistration;
+import lombok.RequiredArgsConstructor;
+
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private final WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor;
 
     // ✅ Heartbeat scheduler (REQUIRED when using setHeartbeatValue)
     @Bean
@@ -43,6 +50,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setApplicationDestinationPrefixes("/app");
 
         registry.setUserDestinationPrefix("/user");
+    }
+
+    // Register channel interceptor to authenticate STOMP CONNECT frames
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(webSocketAuthChannelInterceptor);
     }
 
     // ✅ Transport limits

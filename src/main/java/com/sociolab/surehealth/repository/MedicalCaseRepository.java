@@ -14,9 +14,10 @@ public interface MedicalCaseRepository extends JpaRepository<MedicalCase ,Long> 
 
     Optional<MedicalCase> findCaseById(Long caseId);
 
-    Page<MedicalCase> findByDoctorId(Long doctorId, Pageable pageable);
+    // Find by nested property (doctor.user id)
+    Page<MedicalCase> findByDoctor_Id(Long doctorId, Pageable pageable);
 
-    // Get cases for a patient with pagination
-    Page<MedicalCase> findByPatientId(Long patientId, Pageable pageable);
+    // Get cases for a patient with pagination using nested property
+    Page<MedicalCase> findByPatient_Id(Long patientId, Pageable pageable);
 
 }

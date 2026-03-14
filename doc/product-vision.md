@@ -2,7 +2,7 @@
 ProductName - SureHealth
 
 ## Users
-Parents and patients seeking affordable medical second opinions.
+Patients seeking affordable medical second opinions.
 
 ## Problem
 Patients need a reliable, accessible way to confirm medical treatments, ensuring safety and necessity.

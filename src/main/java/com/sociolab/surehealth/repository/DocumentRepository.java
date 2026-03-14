@@ -9,6 +9,7 @@ import java.util.List;
 
 public interface DocumentRepository extends JpaRepository<MedicalDocument, Long> {
 
-    Page<MedicalDocument> findByMedicalCaseId(Long caseId, Pageable pageable);
+    // Query by nested property (medicalCase id)
+    Page<MedicalDocument> findByMedicalCase_Id(Long caseId, Pageable pageable);
 
 }

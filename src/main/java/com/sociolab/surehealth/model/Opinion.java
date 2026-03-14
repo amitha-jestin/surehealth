@@ -17,10 +17,13 @@ public class Opinion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "case_id")
+    private MedicalCase medicalCase;
 
-    private Long caseId;
-    private Long doctorId;
-
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "doctor_id")
+    private User doctor;
 
     @Column(length = 5000)
     private String comment;

@@ -62,8 +62,8 @@ public class CaseService {
         medicalCase.setDescription(request.getDescription());
         medicalCase.setSpeciality(request.getSpeciality());
         medicalCase.setUrgency(request.getUrgency());
-        medicalCase.setPatientId(patient.getId());
-        medicalCase.setDoctorId(doctor.getUser().getId());
+        medicalCase.setPatient(patient);
+        medicalCase.setDoctor(doctor.getUser());
         medicalCase.setStatus(CaseStatus.ASSIGNED);
         medicalCase.setCreatedAt(LocalDateTime.now());
 
@@ -96,10 +96,10 @@ public class CaseService {
         medicalCase.setStatus(CaseStatus.ACCEPTED);
 
         log.info("Case accepted caseId={} doctorId={}",
-                caseId, medicalCase.getDoctorId());
+                caseId, medicalCase.getDoctor().getId());
 
         eventPublisher.publishEvent(new CaseNotificationEvent(
-                medicalCase.getPatientId(),
+                medicalCase.getPatient() != null ? medicalCase.getPatient().getId() : null,
                 "Doctor accepted your case",
                 NotificationEventType.CASE_ACCEPTED
         ));
@@ -121,10 +121,10 @@ public class CaseService {
         medicalCase.setStatus(CaseStatus.REJECTED);
 
         log.info("Case rejected caseId={} doctorId={}",
-                caseId, medicalCase.getDoctorId());
+                caseId, medicalCase.getDoctor().getId());
 
         eventPublisher.publishEvent(new CaseNotificationEvent(
-                medicalCase.getPatientId(),
+                medicalCase.getPatient() != null ? medicalCase.getPatient().getId() : null,
                 "Doctor rejected your case",
                 NotificationEventType.CASE_REJECTED
         ));
@@ -155,8 +155,8 @@ public class CaseService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
         Page<MedicalCase> casesPage = switch (user.getRole()) {
-            case DOCTOR -> caseRepository.findByDoctorId(user.getId(), pageable);
-            case PATIENT -> caseRepository.findByPatientId(user.getId(), pageable);
+            case DOCTOR -> caseRepository.findByDoctor_Id(user.getId(), pageable);
+            case PATIENT -> caseRepository.findByPatient_Id(user.getId(), pageable);
             default -> throw new AppException(ErrorType.ACCESS_DENIED);
         };
 
@@ -190,7 +190,7 @@ public class CaseService {
 
         validateDoctorStatus(doctor);
 
-        if (!medicalCase.getDoctorId().equals(doctor.getUser().getId())) {
+        if (!medicalCase.getDoctor().getId().equals(doctor.getUser().getId())) {
             log.warn("Unauthorized case action attempt caseId={} doctorId={}",
                     caseId, doctor.getUser().getId());
             throw new AppException(ErrorType.ACCESS_DENIED);
@@ -222,7 +222,7 @@ public class CaseService {
                 c.getUrgency(),
                 c.getStatus(),
                 c.getCreatedAt(),
-                c.getDoctorId()
+                c.getDoctor() != null ? c.getDoctor().getId() : null
         );
     }
 }

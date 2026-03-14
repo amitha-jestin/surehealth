@@ -28,15 +28,19 @@ public class NotificationService {
     private final SimpMessagingTemplate messagingTemplate;
 
     // ================= SEND CASE NOTIFICATION ASYNC =================
-    @Async
-    public void sendCaseNotification(Long userId,
-                                     String message,
-                                     NotificationEventType eventType) {
+    // Synchronous implementation used by callers that need to observe failures (e.g. Kafka consumer)
+    public void sendCaseNotificationSync(Long userId,
+                                         String message,
+                                         NotificationEventType eventType) {
 
-        log.info("Sending notification userId={} eventType={} message={}", userId, eventType, message);
+        log.info("Sending notification (sync) userId={} eventType={} message={}", userId, eventType, message);
+
+        // Try to resolve target user; allow null (notification will have null user) if not found
+        var optionalUser = userRepository.findById(userId);
+        var targetUser = optionalUser.orElse(null);
 
         Notification notification = Notification.builder()
-                .userId(userId)
+                .user(targetUser)
                 .message(message)
                 .eventType(eventType)
                 .readStatus(false)
@@ -44,13 +48,27 @@ public class NotificationService {
 
         notificationRepository.save(notification);
 
-        messagingTemplate.convertAndSendToUser(
-                userId.toString(),
-                "/queue/notifications",
-                notification
-        );
+        // Send via websocket (if user is connected). This may throw runtime exceptions which callers can handle.
+        try {
+            messagingTemplate.convertAndSendToUser(
+                    userId.toString(),
+                    "/queue/notifications",
+                    notification
+            );
+        } catch (Exception wsEx) {
+            // Log websocket delivery failures but do not fail the entire notification persist step
+            log.warn("Websocket delivery failed for userId={} error={}", userId, wsEx.getMessage(), wsEx);
+        }
 
-        log.debug("Notification sent successfully userId={} notificationId={}", userId, notification.getId());
+        log.debug("Notification persisted successfully userId={} notificationId={}", userId, notification.getId());
+    }
+
+    @Async
+    public void sendCaseNotification(Long userId,
+                                     String message,
+                                     NotificationEventType eventType) {
+        // Async wrapper delegates to the synchronous implementation
+        sendCaseNotificationSync(userId, message, eventType);
     }
 
     // ================= GET READ NOTIFICATIONS (PAGED) =================
@@ -67,7 +85,7 @@ public class NotificationService {
         Pageable pageable = PageRequest.of(page, size);
 
         Page<Notification> notifications =
-                notificationRepository.findByUserIdAndReadStatus(user.getId(), true, pageable);
+                notificationRepository.findByUser_IdAndReadStatus(user.getId(), true, pageable);
 
         log.debug("Read notifications fetched email={} total={}", masked, notifications.getTotalElements());
 
@@ -88,7 +106,7 @@ public class NotificationService {
         Pageable pageable = PageRequest.of(page, size);
 
         Page<Notification> notifications =
-                notificationRepository.findByUserIdAndReadStatus(user.getId(), false, pageable);
+                notificationRepository.findByUser_IdAndReadStatus(user.getId(), false, pageable);
 
         log.debug("Unread notifications fetched email={} total={}", masked, notifications.getTotalElements());
 
@@ -99,7 +117,7 @@ public class NotificationService {
     private NotificationResponse mapToResponse(Notification notification) {
         return new NotificationResponse(
                 notification.getId(),
-                notification.getUserId(),
+                notification.getUser() != null ? notification.getUser().getId() : null,
                 notification.getMessage(),
                 notification.getEventType(),
                 notification.isReadStatus(),
