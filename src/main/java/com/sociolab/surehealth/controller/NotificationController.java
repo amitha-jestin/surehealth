@@ -10,7 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import com.sociolab.surehealth.security.SecurityUtil;
+import com.sociolab.surehealth.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.sociolab.surehealth.logging.LogUtil;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,8 +36,8 @@ public class NotificationController {
     public ResponseEntity<PagedResponse<NotificationResponse>> getUnreadNotifications(
             @Min(0) @RequestParam(defaultValue = "0") int page,
             @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size
-    ) {
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String email = userPrincipal.email();
         String masked = LogUtil.maskEmail(email);
         log.debug("NOTIFICATION_QUERY: unreadNotifications email={} page={} size={}",
                 masked, page, size);
@@ -59,8 +60,8 @@ public class NotificationController {
     public ResponseEntity<PagedResponse<NotificationResponse>> getReadNotifications(
             @Min(0) @RequestParam(defaultValue = "0") int page,
             @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size
-    ) {
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String email = userPrincipal.email();
         String masked = LogUtil.maskEmail(email);
         log.debug("NOTIFICATION_QUERY: readNotifications email={} page={} size={}",
                 masked, page, size);

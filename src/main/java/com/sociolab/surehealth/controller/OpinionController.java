@@ -2,7 +2,8 @@ package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
 import com.sociolab.surehealth.service.OpinionService;
-import com.sociolab.surehealth.security.SecurityUtil;
+import com.sociolab.surehealth.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.sociolab.surehealth.logging.LogUtil;
 import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.Valid;
@@ -35,9 +36,10 @@ public class OpinionController {
     @PostMapping("/{caseId}")
     public ResponseEntity<BaseResponse<OpinionResponse>> submitOpinion(
             @PathVariable Long caseId,
-            @RequestBody @Valid OpinionRequest opinionRequest
+            @RequestBody @Valid OpinionRequest opinionRequest,
+            @AuthenticationPrincipal UserPrincipal doctorPrincipal
     ) {
-        String doctorEmail = SecurityUtil.getCurrentUserEmail();
+        String doctorEmail = doctorPrincipal.email();
         String masked = LogUtil.maskEmail(doctorEmail);
         log.info("OPINION_SUBMIT_ATTEMPT: doctor={} caseId={}", masked, caseId);
 
@@ -46,7 +48,6 @@ public class OpinionController {
         log.info("OPINION_SUBMIT_SUCCESS: doctor={} caseId={} opinionId={}",
                 masked, caseId, response.id());
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ResponseUtil.success(response));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ResponseUtil.success(response));
     }
 }

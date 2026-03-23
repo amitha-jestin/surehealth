@@ -2,9 +2,10 @@ package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
 import com.sociolab.surehealth.logging.LogUtil;
-import com.sociolab.surehealth.security.SecurityUtil;
+import com.sociolab.surehealth.security.UserPrincipal;
 import com.sociolab.surehealth.service.CaseService;
 import com.sociolab.surehealth.service.DocumentService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -16,7 +17,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -47,8 +47,8 @@ public class CaseController {
     @PreAuthorize("hasRole('PATIENT')")
     public ResponseEntity<BaseResponse<CaseResponse>> submitCase(
             @Valid @RequestBody CaseRequest request
-    ) {
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal patientPrincipal) {
+        String email = patientPrincipal.email();
         log.info("CASE_SUBMIT_ATTEMPT: patient={} ", LogUtil.maskEmail(email));
 
         CaseResponse response = caseService.submitCase(email, request);
@@ -56,8 +56,7 @@ public class CaseController {
         log.info("CASE_SUBMIT_SUCCESS: patient={} caseId={}",
                 LogUtil.maskEmail(email), response.caseId());
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ResponseUtil.success(response));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ResponseUtil.success(response));
     }
 
     // ================= UPLOAD DOCUMENT =================
@@ -72,9 +71,8 @@ public class CaseController {
     public ResponseEntity<PagedResponse<DocumentResponse>> uploadDocument(
             @PathVariable Long caseId,
             @RequestParam("files") @Size(max = 5) List<MultipartFile> files
-    ) {
-
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal patientPrincipal) {
+        String email = patientPrincipal.email();
         log.info("DOCUMENT_UPLOAD_ATTEMPT: patient={} caseId={} fileCount={}",
                 LogUtil.maskEmail(email), caseId, files.size());
 
@@ -99,8 +97,8 @@ public class CaseController {
             @PathVariable Long caseId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
-    ) {
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String email = userPrincipal.email();
         log.debug("CASE_DOC_QUERY: user={} caseId={} page={} size={}",
                 LogUtil.maskEmail(email), caseId, page, size);
 
@@ -120,8 +118,8 @@ public class CaseController {
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<BaseResponse<CaseResponse>> acceptCase(
             @PathVariable Long caseId
-    ) {
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal doctorPrincipal) {
+        String email = doctorPrincipal.email();
         log.info("CASE_ACCEPT_ATTEMPT: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
 
         CaseResponse response = caseService.acceptCase(caseId, email);
@@ -142,8 +140,8 @@ public class CaseController {
     @PreAuthorize("hasRole('DOCTOR')")
     public ResponseEntity<BaseResponse<CaseResponse>> rejectCase(
             @PathVariable Long caseId
-    ) {
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal doctorPrincipal) {
+        String email = doctorPrincipal.email();
         log.info("CASE_REJECT_ATTEMPT: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
 
         CaseResponse response = caseService.rejectCase(caseId, email);
@@ -163,8 +161,8 @@ public class CaseController {
     public ResponseEntity<PagedResponse<CaseResponse>> getMyCases(
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
-    ) {
-        String email = SecurityUtil.getCurrentUserEmail();
+    , @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String email = userPrincipal.email();
         log.debug("MY_CASES_QUERY: user={} page={} size={}", LogUtil.maskEmail(email), page, size);
 
         Page<CaseResponse> pagedCases = caseService.getMyCases(email, page, size);

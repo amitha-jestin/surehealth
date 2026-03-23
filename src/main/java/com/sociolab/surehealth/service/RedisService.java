@@ -27,6 +27,20 @@ public class RedisService {
         redisTemplate.delete("refresh_token:" + userId);
     }
 
+    public void revokeRefreshTokens(Long userId) {
+        redisTemplate.delete("refresh_token:" + userId);
+        redisTemplate.delete("refresh_token_prev:" + userId);
+    }
+
+    public void savePreviousRefreshToken(Long userId, String refreshToken, long expiration) {
+        String key = "refresh_token_prev:" + userId;
+        redisTemplate.opsForValue().set(key, refreshToken, expiration, TimeUnit.SECONDS);
+    }
+
+    public String getPreviousRefreshToken(Long userId) {
+        return redisTemplate.opsForValue().get("refresh_token_prev:" + userId);
+    }
+
     // ---------------- Token Blacklist ----------------
 
     public void blacklistToken(String token, long expiration) {
@@ -38,6 +52,19 @@ public class RedisService {
         return Boolean.TRUE.equals(
                 redisTemplate.hasKey("blacklist_token:" + token)
         );
+    }
+
+    public long incrementWithExpiry(String key, long ttlSeconds) {
+        Long value = redisTemplate.opsForValue().increment(key);
+        if (value != null && value == 1L) {
+            redisTemplate.expire(key, ttlSeconds, TimeUnit.SECONDS);
+        }
+        return value != null ? value : 0L;
+    }
+
+    public boolean setIfAbsent(String key, String value, long ttlSeconds) {
+        Boolean set = redisTemplate.opsForValue().setIfAbsent(key, value, ttlSeconds, TimeUnit.SECONDS);
+        return Boolean.TRUE.equals(set);
     }
 
     public void clearAll() {

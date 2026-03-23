@@ -12,6 +12,7 @@ import java.io.Serializable;
 @NoArgsConstructor
 public class CaseNotificationEvent implements Serializable {
 
+    private String eventId;
     private Long userId;
     private String message;
     private NotificationEventType eventType;

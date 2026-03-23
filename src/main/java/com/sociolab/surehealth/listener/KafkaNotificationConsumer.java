@@ -2,6 +2,7 @@ package com.sociolab.surehealth.listener;
 
 import com.sociolab.surehealth.dto.CaseNotificationEvent;
 import com.sociolab.surehealth.service.NotificationService;
+import com.sociolab.surehealth.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,10 +21,14 @@ public class KafkaNotificationConsumer {
 
     private final NotificationService notificationService;
     private final KafkaTemplate<String, CaseNotificationEvent> kafkaTemplate;
+    private final RedisService redisService;
 
     // Dead-letter topic where failed events will be forwarded for later inspection/processing
     @Value("${kafka.dlt-topic:case-notification-dlt}")
     private String dltTopic = "case-notification-dlt";
+
+    @Value("${kafka.consumer.idempotency.ttl-seconds:86400}")
+    private long idempotencyTtlSeconds;
 
     @KafkaListener(
             topics = "case-notification-topic",
@@ -34,6 +39,18 @@ public class KafkaNotificationConsumer {
         log.info("Kafka event received for userId={} eventType={}", event.getUserId(), event.getEventType());
 
         try {
+            if (event.getEventId() != null && !event.getEventId().isBlank()) {
+                String key = "kafka:case-event:" + event.getEventId();
+                boolean firstTime = redisService.setIfAbsent(key, "processed", idempotencyTtlSeconds);
+                if (!firstTime) {
+                    log.warn("Duplicate Kafka event skipped eventId={} userId={}", event.getEventId(), event.getUserId());
+                    return;
+                }
+            } else {
+                log.warn("Kafka event missing eventId; processing without idempotency userId={} type={}",
+                        event.getUserId(), event.getEventType());
+            }
+
             // Delegate to NotificationService which handles persistence and websocket delivery
             // Use synchronous call so any failures are thrown to the surrounding catch and can be DLT'd
             notificationService.sendCaseNotificationSync(

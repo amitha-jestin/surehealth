@@ -11,6 +11,7 @@ public enum ErrorType {
 
     JWT_BLACKLISTED("JWT token is blacklisted", 401),
     JWT_INVALID_TOKEN("JWT token is invalid", 401),
+    TOO_MANY_REQUESTS("Too many requests, please try again later", 429),
     // CLIENT / REQUEST ERRORS
     RESOURCE_NOT_FOUND("Requested resource not found", 404),
     DUPLICATE_RESOURCE("Resource already exists", 409),

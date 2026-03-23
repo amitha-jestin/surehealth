@@ -1,14 +1,14 @@
 package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
-import com.sociolab.surehealth.security.SecurityUtil;
+import com.sociolab.surehealth.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.sociolab.surehealth.service.AdminService;
 import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,11 +37,12 @@ public class AdminController {
     })
     @PatchMapping("/doctors/{doctorId}/approve")
     public ResponseEntity<BaseResponse<Void>> approveDoctor(
-            @PathVariable @Min(1) Long doctorId) {
+            @PathVariable @Min(1) Long doctorId,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
 
-        Long adminId = SecurityUtil.getCurrentUserId();
+        Long adminId = adminPrincipal.userId();
         log.info("ADMIN_ACTION: approveDoctor doctorId={} adminId ={} ", doctorId , adminId);
-        adminService.approveDoctor(adminId , doctorId);
+        adminService.approveDoctor(adminId, doctorId);
 
         return ResponseEntity.ok(
                 ResponseUtil.successMessage("Doctor approved successfully")
@@ -57,10 +58,11 @@ public class AdminController {
     })
     @PatchMapping("/users/{userId}/block")
     public ResponseEntity<BaseResponse<Void>> blockUser(
-            @PathVariable @Min(1) Long userId) {
+            @PathVariable @Min(1) Long userId,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
 
-        Long adminId = SecurityUtil.getCurrentUserId();
-        log.info("ADMIN_ACTION: blockUser userId={} adminId={}", userId , adminId);
+        Long adminId = adminPrincipal.userId();
+        log.info("ADMIN_ACTION: blockUser userId={} adminId={}", userId, adminId);
         adminService.blockUser(adminId, userId);
         return ResponseEntity.ok(
                 ResponseUtil.successMessage("User blocked successfully")
@@ -76,10 +78,11 @@ public class AdminController {
     })
     @PatchMapping("/users/{userId}/unblock")
     public ResponseEntity<BaseResponse<Void>> unblockUser(
-            @PathVariable @Min(1) Long userId) {
-        Long adminId = SecurityUtil.getCurrentUserId();
-        log.info("ADMIN_ACTION: unblockUser userId={} adminId={}", userId,  adminId);
-        adminService.unblockUser(adminId , userId);
+            @PathVariable @Min(1) Long userId,
+            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
+        Long adminId = adminPrincipal.userId();
+        log.info("ADMIN_ACTION: unblockUser userId={} adminId={}", userId, adminId);
+        adminService.unblockUser(adminId, userId);
 
         return ResponseEntity.ok(
                 ResponseUtil.successMessage("User unblocked successfully")

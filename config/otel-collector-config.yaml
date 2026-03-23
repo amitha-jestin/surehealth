@@ -1,0 +1,23 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  splunk_hec:
+    token: ${SPLUNK_HEC_TOKEN}
+    endpoint: ${SPLUNK_HEC_ENDPOINT}
+    source: surehealth
+    sourcetype: _json
+    index: ${SPLUNK_HEC_INDEX}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [splunk_hec]

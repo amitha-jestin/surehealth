@@ -1,0 +1,8 @@
+-- Rollback for baseline schema
+
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS opinions CASCADE;
+DROP TABLE IF EXISTS medical_documents CASCADE;
+DROP TABLE IF EXISTS cases CASCADE;
+DROP TABLE IF EXISTS doctors CASCADE;
+DROP TABLE IF EXISTS users CASCADE;

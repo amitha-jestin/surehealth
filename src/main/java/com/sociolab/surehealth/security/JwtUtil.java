@@ -25,6 +25,15 @@ public class JwtUtil {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpirationMs;
 
+    @Value("${jwt.issuer}")
+    private String issuer;
+
+    @Value("${jwt.audience}")
+    private String audience;
+
+    @Value("${jwt.clock-skew-seconds:60}")
+    private long clockSkewSeconds;
+
     private SecretKey key;
 
     @PostConstruct
@@ -51,6 +60,8 @@ public class JwtUtil {
                 .subject(email)
                 .claim("role", role.name())
                 .claim("id", id)
+                .issuer(issuer)
+                .audience().add(audience).and()
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(key, Jwts.SIG.HS256)
@@ -63,6 +74,8 @@ public class JwtUtil {
 
         return Jwts.builder()
                 .setSubject(userId.toString())
+                .issuer(issuer)
+                .audience().add(audience).and()
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(key, Jwts.SIG.HS256)
@@ -75,6 +88,9 @@ public class JwtUtil {
 
     public Claims extractAllClaims(String token) {
         return Jwts.parser()
+                .requireIssuer(issuer)
+                .requireAudience(audience)
+                .clockSkewSeconds(clockSkewSeconds)
                 .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
