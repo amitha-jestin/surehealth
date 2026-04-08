@@ -1,7 +1,10 @@
 package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
+import com.sociolab.surehealth.enums.ErrorType;
+import com.sociolab.surehealth.exception.custom.AppException;
 import com.sociolab.surehealth.security.UserPrincipal;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.sociolab.surehealth.service.AdminService;
 import com.sociolab.surehealth.utils.ResponseUtil;
@@ -41,52 +44,44 @@ public class AdminController {
             @AuthenticationPrincipal UserPrincipal adminPrincipal) {
 
         Long adminId = adminPrincipal.userId();
-        log.info("ADMIN_ACTION: approveDoctor doctorId={} adminId ={} ", doctorId , adminId);
+        log.info("action=admin_approve_doctor status=START adminId={} doctorId={}", adminId, doctorId);
         adminService.approveDoctor(adminId, doctorId);
+        log.info("action=admin_approve_doctor status=SUCCESS adminId={} doctorId={}", adminId, doctorId);
 
         return ResponseEntity.ok(
                 ResponseUtil.successMessage("Doctor approved successfully")
         );
     }
 
-    // ================== BLOCK USER ==================
-    @Operation(summary = "Block user account", description = "Admin blocks a user")
+    // ================== CHANGE ACCOUNT STATUS ==================
+    @Operation(summary = "Change user account status", description = "Admin changes a user's account status")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "User blocked successfully"),
+            @ApiResponse(responseCode = "200", description = "User status changed successfully"),
             @ApiResponse(responseCode = "404", description = "User not found"),
-            @ApiResponse(responseCode = "400", description = "User already blocked")
+            @ApiResponse(responseCode = "400", description = "Invalid status or operation")
     })
-    @PatchMapping("/users/{userId}/block")
-    public ResponseEntity<BaseResponse<Void>> blockUser(
+    @PatchMapping("/users/{userId}/status")
+    public ResponseEntity<BaseResponse<Void>> updateUserStatus(
             @PathVariable @Min(1) Long userId,
+            @Valid @RequestBody UserStatusUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal adminPrincipal) {
 
         Long adminId = adminPrincipal.userId();
-        log.info("ADMIN_ACTION: blockUser userId={} adminId={}", userId, adminId);
-        adminService.blockUser(adminId, userId);
-        return ResponseEntity.ok(
-                ResponseUtil.successMessage("User blocked successfully")
-        );
-    }
 
-    // ================== UNBLOCK USER ==================
-    @Operation(summary = "Unblock user account", description = "Admin unblocks a user")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "User unblocked successfully"),
-            @ApiResponse(responseCode = "404", description = "User not found"),
-            @ApiResponse(responseCode = "400", description = "User already active or invalid status")
-    })
-    @PatchMapping("/users/{userId}/unblock")
-    public ResponseEntity<BaseResponse<Void>> unblockUser(
-            @PathVariable @Min(1) Long userId,
-            @AuthenticationPrincipal UserPrincipal adminPrincipal) {
-        Long adminId = adminPrincipal.userId();
-        log.info("ADMIN_ACTION: unblockUser userId={} adminId={}", userId, adminId);
-        adminService.unblockUser(adminId, userId);
+        log.info("action=admin_update_user_status status=START adminId={} userId={} newStatus={}",
+                adminId, userId, request.newStatus());
 
-        return ResponseEntity.ok(
-                ResponseUtil.successMessage("User unblocked successfully")
-        );
+        adminService.updateUserStatus(adminId, userId, request.newStatus());
+        log.info("action=admin_update_user_status status=SUCCESS adminId={} userId={} newStatus={}",
+                adminId, userId, request.newStatus());
+
+        String message = switch (request.newStatus()) {
+            case BLOCKED -> "User blocked successfully";
+            case ACTIVE -> "User unblocked successfully";
+            default -> "User status updated successfully";
+        };
+
+        return ResponseEntity.ok(ResponseUtil.successMessage(message));
     }
 
     // ================== GET PATIENTS ==================
@@ -99,8 +94,10 @@ public class AdminController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
 
-        log.debug("ADMIN_QUERY: getAllPatients page={} size={}", page, size);
+        log.info("action=admin_get_patients status=START page={} size={}", page, size);
         var pagedPatients = adminService.getAllPatients(page, size);
+        log.info("action=admin_get_patients status=SUCCESS page={} size={} count={}",
+                page, size, pagedPatients.getNumberOfElements());
         return ResponseEntity.ok(ResponseUtil.paged(pagedPatients));
     }
 
@@ -114,8 +111,10 @@ public class AdminController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
 
-        log.debug("ADMIN_QUERY: getAllDoctors page={} size={} ", page, size);
+        log.info("action=admin_get_doctors status=START page={} size={}", page, size);
         var pagedDoctors = adminService.getAllDoctors(page, size);
+        log.info("action=admin_get_doctors status=SUCCESS page={} size={} count={}",
+                page, size, pagedDoctors.getNumberOfElements());
         return ResponseEntity.ok(ResponseUtil.paged(pagedDoctors));
     }
 }

@@ -36,21 +36,18 @@ public class CaseServiceImpl implements CaseService {
     // ================= SUBMIT CASE =================
     @Transactional
     @Override
-    public CaseResponse submitCase(String patientEmail, CaseRequest request) {
+    public CaseResponse submitCase(Long userId, CaseRequest request) {
+        log.debug("action=case_submit status=NOOP layer=service method=submitCase userId={} doctorId={}", userId, request.getDoctorId());
 
-        String maskedPatient = LogUtil.maskEmail(patientEmail);
-        log.info("Submitting case title='{}' patientEmail={} doctorId={}",
-                request.getTitle(), maskedPatient, request.getDoctorId());
-
-        User patient = userRepository.findByEmail(patientEmail)
+        User patient = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("Case submission failed - patient not found email={}", maskedPatient);
+                    log.warn("action=case_submit status=FAILED userId={} reason=PATIENT_NOT_FOUND", userId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 
         Doctor doctor = doctorRepository.findByUserId(request.getDoctorId())
                 .orElseThrow(() -> {
-                    log.warn("Case submission failed - doctor not found doctorId={} ",
+                    log.warn("action=case_submit status=FAILED doctorId={} reason=DOCTOR_NOT_FOUND",
                             request.getDoctorId());
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
@@ -69,106 +66,79 @@ public class CaseServiceImpl implements CaseService {
 
         MedicalCase savedCase = caseRepository.save(medicalCase);
 
-        log.info("Case created successfully caseId={} patientId={} doctorId={}",
+        log.info("action=case_submit status=SUCCESS caseId={} userId={} doctorId={}",
                 savedCase.getId(), patient.getId(), doctor.getUser().getId());
 
         // enqueue outbox event for reliable async delivery
         outboxService.enqueue(
-                "CASE_ASSIGNED",
+                "CASE_CREATED",
                 "MedicalCase",
                 savedCase.getId().toString(),
                 new CaseNotificationEvent(
                         java.util.UUID.randomUUID().toString(),
                         doctor.getUser().getId(),
                         "New case assigned: " + request.getTitle(),
-                        NotificationEventType.CASE_ASSIGNED
+                        null,
+                        CaseStatus.ASSIGNED,
+                        "Patient ID: " + patient.getId(),
+                        LocalDateTime.now()
                 )
         );
 
-        log.debug("Outbox event enqueued for case assignment caseId={}", savedCase.getId());
+        log.debug("action=case_submit status=SUCCESS caseId={}", savedCase.getId());
 
         return mapToResponse(savedCase);
     }
 
-    // ================= ACCEPT CASE =================
-    @Transactional
+    // ================= UPDATE CASE STATUS =================
+
     @Override
-    public CaseResponse acceptCase(Long caseId, String doctorEmail) {
+    @Transactional
+    public CaseResponse updateCaseStatus(Long caseId, Long doctorId, CaseStatus status) {
+        log.debug("action=case_status_update status=NOOP layer=service method=updateCaseStatus caseId={} userId={} newStatus={}", caseId, doctorId, status);
 
-        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
-        log.info("Doctor attempting to accept case caseId={} doctorEmail={}",
-                caseId, maskedDoctor);
+        MedicalCase medicalCase = getCaseForDoctorAction(caseId, doctorId);
+        CaseStatus oldStatus = medicalCase.getStatus();
+        medicalCase.setStatus(status);
 
-        MedicalCase medicalCase = getCaseForDoctorAction(caseId, doctorEmail);
-        medicalCase.setStatus(CaseStatus.ACCEPTED);
+        log.info("action=case_status_update status=SUCCESS caseId={} newStatus={}",
+                caseId, status);
 
-        log.info("Case accepted caseId={} doctorId={}",
-                caseId, medicalCase.getDoctor().getId());
 
-        outboxService.enqueue(
-                "CASE_ACCEPTED",
+        outboxService.enqueue("CASE_STATUS_UPDATED",
                 "MedicalCase",
                 medicalCase.getId().toString(),
                 new CaseNotificationEvent(
                         java.util.UUID.randomUUID().toString(),
                         medicalCase.getPatient() != null ? medicalCase.getPatient().getId() : null,
-                        "Doctor accepted your case",
-                        NotificationEventType.CASE_ACCEPTED
+                        "Doctor changed your case status to " + status,
+                        oldStatus,
+                        status,
+                        "Doctor ID: " + doctorId,
+                        LocalDateTime.now()
+
                 )
         );
 
-        log.debug("Outbox event enqueued for case acceptance caseId={}", caseId);
+        log.debug("action=case_status_update status=SUCCESS caseId={}", caseId);
 
-        return mapToResponse(medicalCase);
-    }
-
-    // ================= REJECT CASE =================
-    @Transactional
-    @Override
-    public CaseResponse rejectCase(Long caseId, String doctorEmail) {
-
-        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
-        log.info("Doctor attempting to reject case caseId={} doctorEmail={}",
-                caseId, maskedDoctor);
-
-        MedicalCase medicalCase = getCaseForDoctorAction(caseId, doctorEmail);
-        medicalCase.setStatus(CaseStatus.REJECTED);
-
-        log.info("Case rejected caseId={} doctorId={}",
-                caseId, medicalCase.getDoctor().getId());
-
-        outboxService.enqueue(
-                "CASE_REJECTED",
-                "MedicalCase",
-                medicalCase.getId().toString(),
-                new CaseNotificationEvent(
-                        java.util.UUID.randomUUID().toString(),
-                        medicalCase.getPatient() != null ? medicalCase.getPatient().getId() : null,
-                        "Doctor rejected your case",
-                        NotificationEventType.CASE_REJECTED
-                )
-        );
-
-        log.debug("Outbox event enqueued for case rejection caseId={}", caseId);
 
         return mapToResponse(medicalCase);
     }
 
     // ================= GET MY CASES =================
     @Override
-    public Page<CaseResponse> getMyCases(String email, int page, int size) {
+    public Page<CaseResponse> getMyCases(Long userId, int page, int size) {
+        log.debug("action=case_my_fetch status=NOOP layer=service method=getMyCases userId={} page={} size={}", userId, page, size);
 
-        String masked = LogUtil.maskEmail(email);
-        log.debug("Fetching cases email={} page={} size={}", masked, page, size);
-
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("Get cases failed - user not found email={}", masked);
+                    log.warn("action=case_my_fetch status=FAILED userId={} reason=USER_NOT_FOUND", userId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 
         if (user.getRole() != Role.DOCTOR && user.getRole() != Role.PATIENT) {
-            log.warn("Unauthorized case access attempt userId={} role={}",
+            log.warn("action=case_my_fetch status=FAILED userId={} reason=ACCESS_DENIED role={}",
                     user.getId(), user.getRole());
             throw new AppException(ErrorType.ACCESS_DENIED);
         }
@@ -181,44 +151,37 @@ public class CaseServiceImpl implements CaseService {
             default -> throw new AppException(ErrorType.ACCESS_DENIED);
         };
 
-        log.debug("Cases fetched count={} userId={}",
-                casesPage.getTotalElements(), user.getId());
+        log.info("action=case_my_fetch status=SUCCESS userId={} count={}",
+                user.getId(), casesPage.getTotalElements());
 
         return casesPage.map(this::mapToResponse);
     }
 
     // ================= HELPER METHODS =================
-    private MedicalCase getCaseForDoctorAction(Long caseId, String doctorEmail) {
+    private MedicalCase getCaseForDoctorAction(Long caseId, Long doctorId) {
 
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> {
-                    log.warn("Case not found caseId={}", caseId);
+                    log.warn("action=case_status_update status=FAILED caseId={} reason=CASE_NOT_FOUND", caseId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 
-        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
-        User user = userRepository.findByEmail(doctorEmail)
+        Doctor doctor = doctorRepository.findById(doctorId)
                 .orElseThrow(() -> {
-                    log.warn("Doctor user not found email={}", maskedDoctor);
-                    return new AppException(ErrorType.RESOURCE_NOT_FOUND);
-                });
-
-        Doctor doctor = doctorRepository.findById(user.getId())
-                .orElseThrow(() -> {
-                    log.warn("Doctor entity not found userId={}", user.getId());
+                    log.warn("action=case_status_update status=FAILED userId={} reason=DOCTOR_NOT_FOUND", doctorId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND);
                 });
 
         validateDoctorStatus(doctor);
 
         if (!medicalCase.getDoctor().getId().equals(doctor.getUser().getId())) {
-            log.warn("Unauthorized case action attempt caseId={} doctorId={}",
+            log.warn("action=case_status_update status=FAILED caseId={} userId={} reason=NOT_ASSIGNED",
                     caseId, doctor.getUser().getId());
             throw new AppException(ErrorType.ACCESS_DENIED);
         }
 
         if (medicalCase.getStatus() != CaseStatus.ASSIGNED) {
-            log.warn("Invalid case action caseId={} status={}",
+            log.warn("action=case_status_update status=FAILED caseId={} reason=INVALID_STATUS currentStatus={}",
                     caseId, medicalCase.getStatus());
             throw new AppException(ErrorType.INVALID_OPERATION);
         }
@@ -228,7 +191,7 @@ public class CaseServiceImpl implements CaseService {
 
     private void validateDoctorStatus(Doctor doctor) {
         if (doctor.getUser().getStatus() != AccountStatus.ACTIVE) {
-            log.warn("Inactive doctor attempted action doctorId={}",
+            log.warn("action=case_status_update status=FAILED userId={} reason=DOCTOR_INACTIVE",
                     doctor.getUser().getId());
             throw new AppException(ErrorType.USER_INVALID_STATUS);
         }

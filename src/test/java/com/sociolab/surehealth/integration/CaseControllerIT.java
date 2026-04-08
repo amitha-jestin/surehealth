@@ -1,28 +1,53 @@
 package com.sociolab.surehealth.integration;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sociolab.surehealth.dto.CaseRequest;
-import com.sociolab.surehealth.dto.LoginRequest;
-import com.sociolab.surehealth.model.Doctor;
-import com.sociolab.surehealth.model.User;
+import com.sociolab.surehealth.enums.AccountStatus;
+import com.sociolab.surehealth.enums.CaseStatus;
+import com.sociolab.surehealth.enums.Role;
 import com.sociolab.surehealth.enums.Speciality;
-import com.sociolab.surehealth.testdata.TestDataFactory;
+import com.sociolab.surehealth.enums.Urgency;
+import com.sociolab.surehealth.model.MedicalCase;
+import com.sociolab.surehealth.model.MedicalDocument;
+import com.sociolab.surehealth.model.User;
+import com.sociolab.surehealth.repository.DocumentRepository;
+import com.sociolab.surehealth.repository.MedicalCaseRepository;
+import com.sociolab.surehealth.repository.OutboxEventRepository;
 import com.sociolab.surehealth.repository.UserRepository;
+import com.sociolab.surehealth.security.UserPrincipal;
+import com.sociolab.surehealth.testdata.TestDataFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import java.time.LocalDateTime;
+import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
 class CaseControllerIT extends TestContainersConfig {
+
+    private static final String BASE = "/api/v1/cases";
 
     @Autowired
     private MockMvc mockMvc;
@@ -36,130 +61,407 @@ class CaseControllerIT extends TestContainersConfig {
     @Autowired
     private UserRepository userRepository;
 
-    // Happy path: patient submits a case, doctor sees it and accepts it
-    @Test
-    void submitCase_thenDoctorAccepts_and_patientAndDoctorCanQuery() throws Exception {
+    @Autowired
+    private MedicalCaseRepository caseRepository;
 
-        // create patient and doctor
-        String patientPassword = "PatientPass1!";
-        User patient = testDataFactory.createPatient(patientPassword);
+    @Autowired
+    private DocumentRepository documentRepository;
 
-        String doctorPassword = "DoctorPass1!";
-        Doctor doctor = testDataFactory.createDoctor(doctorPassword);
-        User doctorUser = doctor.getUser();
-        // activate doctor so actions are allowed
-        doctorUser.setStatus(com.sociolab.surehealth.enums.AccountStatus.ACTIVE);
-        // persist the updated status so authentication/login sees ACTIVE status
-        userRepository.save(doctorUser);
+    @Autowired
+    private OutboxEventRepository outboxRepository;
 
-        // save activated doctor user via login flow: need to login, but TestDataFactory saved user already in DB
-        // perform login for patient to get token
-        LoginRequest loginPatient = new LoginRequest(patient.getEmail(), patientPassword);
-        MvcResult loginPatientRes = mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginPatient)))
-                .andExpect(status().isOk())
-                .andReturn();
+    private User patient;
+    private User doctor;
 
-        String patientToken = objectMapper.readTree(loginPatientRes.getResponse().getContentAsString())
-                .path("data").path("token").asText();
-
-        // login doctor
-        LoginRequest loginDoctor = new LoginRequest(doctorUser.getEmail(), doctorPassword);
-        MvcResult loginDoctorRes = mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginDoctor)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String doctorToken = objectMapper.readTree(loginDoctorRes.getResponse().getContentAsString())
-                .path("data").path("token").asText();
-
-        // submit case
-        CaseRequest caseReq = new CaseRequest();
-        caseReq.setTitle("Test Case Title");
-        caseReq.setDescription("Some description");
-        caseReq.setSpeciality(Speciality.CARDIOLOGY);
-        caseReq.setUrgency(com.sociolab.surehealth.enums.Urgency.HIGH);
-        caseReq.setDoctorId(doctorUser.getId());
-
-        MvcResult submitRes = mockMvc.perform(post("/api/v1/cases")
-                        .header("Authorization", "Bearer " + patientToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(caseReq)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.caseId").isNumber())
-                .andReturn();
-
-        JsonNode submitRoot = objectMapper.readTree(submitRes.getResponse().getContentAsString());
-        Long caseId = submitRoot.path("data").path("caseId").asLong();
-
-        // doctor fetches his cases (my)
-        mockMvc.perform(get("/api/v1/cases/my")
-                        .header("Authorization", "Bearer " + doctorToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].caseId").value(caseId.intValue()));
-
-        // doctor accepts case
-        mockMvc.perform(patch("/api/v1/cases/" + caseId + "/accept")
-                        .header("Authorization", "Bearer " + doctorToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("ACCEPTED"));
-
-        // patient fetches his cases and sees accepted status
-        mockMvc.perform(get("/api/v1/cases/my")
-                        .header("Authorization", "Bearer " + patientToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].status").value("ACCEPTED"));
+    @BeforeEach
+    void setup() {
+        patient = testDataFactory.createPatient("Pati3nt!pass");
+        doctor = testDataFactory.createDoctor("Doc2tor!pass").getUser();
+        doctor.setStatus(AccountStatus.ACTIVE);
+        doctor.setRole(Role.DOCTOR);
+        userRepository.save(doctor);
     }
 
-    @Test
-    void doctorRejectsCase_returnsRejected() throws Exception {
-        String patientPassword = "P2Pass!";
-        User patient = testDataFactory.createPatient(patientPassword);
+    private UserPrincipal mockPatient() {
+        return new UserPrincipal(patient.getId(), patient.getEmail(), Role.PATIENT, "");
+    }
 
-        String doctorPassword = "D2Pass!";
-        Doctor doctor = testDataFactory.createDoctor(doctorPassword);
-        User doctorUser = doctor.getUser();
-        doctorUser.setStatus(com.sociolab.surehealth.enums.AccountStatus.ACTIVE);
-        userRepository.save(doctorUser);
+    private UserPrincipal mockDoctor() {
+        return new UserPrincipal(doctor.getId(), doctor.getEmail(), Role.DOCTOR, "");
+    }
 
-        // login patient and doctor
-        LoginRequest loginPatient = new LoginRequest(patient.getEmail(), patientPassword);
-        String patientToken = objectMapper.readTree(mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginPatient)))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString()).path("data").path("token").asText();
+    private RequestPostProcessor patientAuth() {
+        var principal = mockPatient();
+        var auth = new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name()))
+        );
+        return SecurityMockMvcRequestPostProcessors.authentication(auth);
+    }
 
-        LoginRequest loginDoctor = new LoginRequest(doctorUser.getEmail(), doctorPassword);
-        String doctorToken = objectMapper.readTree(mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginDoctor)))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString()).path("data").path("token").asText();
+    private RequestPostProcessor doctorAuth() {
+        var principal = mockDoctor();
+        var auth = new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name()))
+        );
+        return SecurityMockMvcRequestPostProcessors.authentication(auth);
+    }
 
-        // submit case
-        CaseRequest caseReq = new CaseRequest();
-        caseReq.setTitle("Case to reject");
-        caseReq.setDescription("Desc");
-        caseReq.setSpeciality(Speciality.NEUROLOGY);
-        caseReq.setUrgency(com.sociolab.surehealth.enums.Urgency.LOW);
-        caseReq.setDoctorId(doctorUser.getId());
+    private MedicalCase createCase(CaseStatus status) {
+        MedicalCase mc = new MedicalCase();
+        mc.setTitle("Case");
+        mc.setDescription("Desc");
+        mc.setPatient(patient);
+        mc.setDoctor(doctor);
+        mc.setStatus(status);
+        mc.setSpeciality(Speciality.CARDIOLOGY);
+        mc.setUrgency(Urgency.HIGH);
+        mc.setCreatedAt(LocalDateTime.now());
+        return caseRepository.save(mc);
+    }
 
-        JsonNode submitRoot = objectMapper.readTree(mockMvc.perform(post("/api/v1/cases")
-                        .header("Authorization", "Bearer " + patientToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(caseReq)))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString());
+    @Nested
+    @DisplayName("SubmitCase")
+    class SubmitCaseTests {
 
-        Long caseId = submitRoot.path("data").path("caseId").asLong();
+        @Test
+        @DisplayName("shouldSubmitCaseSuccessfully")
+        void shouldSubmitCaseSuccessfully() throws Exception {
+            CaseRequest req = new CaseRequest(
+                    "Chest pain",
+                    "Details",
+                    Speciality.CARDIOLOGY,
+                    Urgency.HIGH,
+                    doctor.getId()
+            );
+            long before_case = caseRepository.count();
+            long before_outbox = outboxRepository.count();
 
-        // doctor rejects
-        mockMvc.perform(patch("/api/v1/cases/" + caseId + "/reject")
-                        .header("Authorization", "Bearer " + doctorToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("REJECTED"));
+            mockMvc.perform(post(BASE).with(patientAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.title").value("Chest pain"));
+
+            assertEquals(before_case+1, caseRepository.findAll().size());
+            assertEquals(before_outbox+1, outboxRepository.findAll().size());
+
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenNoAuth")
+        void shouldReturnUnauthorizedWhenNoAuth() throws Exception {
+            CaseRequest req = new CaseRequest(
+                    "Chest pain",
+                    "Details",
+                    Speciality.CARDIOLOGY,
+                    Urgency.HIGH,
+                    doctor.getId()
+            );
+
+            mockMvc.perform(post(BASE )
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenValidationFails")
+        void shouldReturnBadRequestWhenValidationFails() throws Exception {
+            mockMvc.perform(post(BASE).with(patientAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"title\":\"\",\"description\":\"\",\"doctorId\":1}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("shouldReturnNotFoundWhenDoctorMissing")
+        void shouldReturnNotFoundWhenDoctorMissing() throws Exception {
+            CaseRequest req = new CaseRequest(
+                    "Chest pain",
+                    "Details",
+                    Speciality.CARDIOLOGY,
+                    Urgency.HIGH,
+                    999999L
+            );
+
+            mockMvc.perform(post(BASE).with(patientAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenInvalidEnum")
+        void shouldReturnBadRequestWhenInvalidEnum() throws Exception {
+            mockMvc.perform(post(BASE).with(patientAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"title\":\"t\",\"description\":\"d\",\"speciality\":\"INVALID\",\"urgency\":\"HIGH\",\"doctorId\":1}"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("UploadDocuments")
+    class UploadDocumentsTests {
+
+        @Test
+        @DisplayName("shouldUploadDocumentsSuccessfully")
+        void shouldUploadDocumentsSuccessfully() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+            MockMultipartFile file = new MockMultipartFile(
+                    "files", "report.pdf", "application/pdf", "report".getBytes()
+            );
+            Long before_count = documentRepository.count();
+
+            mockMvc.perform(multipart(BASE + "/{caseId}/documents", mc.getId())
+                            .file(file)
+                            .with(patientAuth()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isArray());
+
+            assertEquals(before_count+1, documentRepository.findAll().size());
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenNoAuth")
+        void shouldReturnUnauthorizedWhenNoAuth() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+            MockMultipartFile file = new MockMultipartFile(
+                    "files", "report.pdf", "application/pdf", "report".getBytes()
+            );
+
+            mockMvc.perform(multipart(BASE + "/{caseId}/documents", mc.getId())
+                            .file(file))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenMissingFiles")
+        void shouldReturnBadRequestWhenMissingFiles() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(multipart(BASE + "/{caseId}/documents", mc.getId())
+                            .with(patientAuth()))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("shouldReturnNotFoundWhenCaseMissing")
+        void shouldReturnNotFoundWhenCaseMissing() throws Exception {
+            MockMultipartFile file = new MockMultipartFile(
+                    "files", "report.txt", "text/plain", "report".getBytes()
+            );
+
+            mockMvc.perform(multipart(BASE + "/{caseId}/documents", 999999L)
+                            .file(file)
+                            .with(patientAuth()))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenTooManyFiles")
+        void shouldReturnBadRequestWhenTooManyFiles() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+            MockMultipartFile file = new MockMultipartFile(
+                    "files", "r.txt", "text/plain", "r".getBytes()
+            );
+
+            mockMvc.perform(multipart(BASE + "/{caseId}/documents", mc.getId())
+                            .file(file).file(file).file(file).file(file).file(file).file(file)
+                            .with(patientAuth()))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("GetCaseDocuments")
+    class GetCaseDocumentsTests {
+
+        @Test
+        @DisplayName("shouldGetCaseDocumentsSuccessfully")
+        void shouldGetCaseDocumentsSuccessfully() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+            MedicalDocument doc = new MedicalDocument();
+            doc.setFileName("a.txt");
+            doc.setFileType("text/plain");
+            doc.setFilePath("/tmp/a.txt");
+            doc.setMedicalCase(mc);
+            documentRepository.save(doc);
+
+            mockMvc.perform(get(BASE + "/{caseId}/documents", mc.getId()).with(patientAuth())
+                            .param("page", "0")
+                            .param("size", "10"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isArray());
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenNoAuth")
+        void shouldReturnUnauthorizedWhenNoAuth() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(get(BASE + "/{caseId}/documents", mc.getId())
+                            .param("page", "0")
+                            .param("size", "10"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenInvalidPage")
+        void shouldReturnBadRequestWhenInvalidPage() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(get(BASE + "/{caseId}/documents", mc.getId()).with(patientAuth())
+                            .param("page", "-1")
+                            .param("size", "10"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("shouldReturnNotFoundWhenCaseMissing")
+        void shouldReturnNotFoundWhenCaseMissing() throws Exception {
+            mockMvc.perform(get(BASE + "/{caseId}/documents", 999999L).with(patientAuth())
+                            .param("page", "0")
+                            .param("size", "10"))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenInvalidSize")
+        void shouldReturnBadRequestWhenInvalidSize() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(get(BASE + "/{caseId}/documents", mc.getId()).with(patientAuth())
+                            .param("page", "0")
+                            .param("size", "101"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("UpdateCaseStatus")
+    class AcceptCaseTests {
+
+        @Test
+        @DisplayName("shouldUpdateCaseSuccessfully")
+        void shouldAcceptCaseSuccessfully() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(patch(BASE + "/{caseId}/status", mc.getId()).with(doctorAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"ACCEPTED\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.status").value("ACCEPTED"));
+
+            MedicalCase updated = caseRepository.findById(mc.getId()).orElseThrow();
+            assertEquals(CaseStatus.ACCEPTED, updated.getStatus());
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenNoAuth")
+        void shouldReturnUnauthorizedWhenNoAuth() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(patch(BASE + "/{caseId}/status", mc.getId())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"ACCEPTED\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("shouldReturnNotFoundWhenCaseMissing")
+        void shouldReturnNotFoundWhenCaseMissing() throws Exception {
+            mockMvc.perform(patch(BASE + "/{caseId}/status", 999999L).with(doctorAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"ACCEPTED\"}"))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenInvalidStatus")
+        void shouldReturnBadRequestWhenInvalidStatus() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ACCEPTED);
+
+            mockMvc.perform(patch(BASE + "/{caseId}/status", mc.getId()).with(doctorAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"REJECTED\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("UpdateCaseStatusEdgeCases")
+    class RejectCaseTests {
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenInvalidEnum")
+        void shouldReturnBadRequestWhenInvalidEnum() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(patch(BASE + "/{caseId}/status", mc.getId()).with(doctorAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"status\":\"INVALID\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenMissingBody")
+        void shouldReturnBadRequestWhenMissingBody() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(patch(BASE + "/{caseId}/status", mc.getId()).with(doctorAuth())
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenMalformedJson")
+        void shouldReturnBadRequestWhenMalformedJson() throws Exception {
+            MedicalCase mc = createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(patch(BASE + "/{caseId}/status", mc.getId()).with(doctorAuth())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("GetMyCases")
+    class GetMyCasesTests {
+
+        @Test
+        @DisplayName("shouldGetMyCasesSuccessfully")
+        void shouldGetMyCasesSuccessfully() throws Exception {
+            createCase(CaseStatus.ASSIGNED);
+
+            mockMvc.perform(get(BASE + "/my").with(patientAuth())
+                            .param("page", "0")
+                            .param("size", "10"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isArray());
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenNoAuth")
+        void shouldReturnUnauthorizedWhenNoAuth() throws Exception {
+            mockMvc.perform(get(BASE + "/my")
+                            .param("page", "0")
+                            .param("size", "10"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenInvalidSize")
+        void shouldReturnBadRequestWhenInvalidSize() throws Exception {
+            mockMvc.perform(get(BASE + "/my").with(patientAuth())
+                            .param("page", "0")
+                            .param("size", "0"))
+                    .andExpect(status().isBadRequest());
+        }
     }
 }

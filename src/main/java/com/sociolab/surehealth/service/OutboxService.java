@@ -2,6 +2,8 @@ package com.sociolab.surehealth.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sociolab.surehealth.enums.ErrorType;
+import com.sociolab.surehealth.exception.custom.AppException;
 import com.sociolab.surehealth.model.OutboxEvent;
 import com.sociolab.surehealth.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +30,8 @@ public class OutboxService {
             event.setPayload(jsonPayload);
             outboxEventRepository.save(event);
         } catch (JsonProcessingException ex) {
-            log.error("Failed to serialize outbox payload type={} aggregateId={}", eventType, aggregateId, ex);
-            throw new IllegalStateException("Failed to serialize outbox payload", ex);
+            log.error("action=outbox_enqueue status=FAILED eventType={} aggregateId={}", eventType, aggregateId, ex);
+            throw new AppException(ErrorType.INTERNAL_SERVER_ERROR, "Failed to serialize outbox payload", ex);
         }
     }
 }

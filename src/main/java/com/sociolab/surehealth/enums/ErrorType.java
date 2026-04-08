@@ -25,8 +25,9 @@ public enum ErrorType {
     USER_PENDING("User account is pending activation", 400),
     USER_INVALID_STATUS("User account is in invalid status for this operation", 400),
     INVALID_OPERATION("Invalid operation for the current state", 400),
-    DOCUMENT_UPLOAD_FAILED("Failed to upload document, please try again", 500);
-    
+    DOCUMENT_UPLOAD_FAILED("Failed to upload document, please try again", 500),
+    INVALID_REQUEST("Invalid request", 400);
+
     private final String message;
     private final int httpCode;
 

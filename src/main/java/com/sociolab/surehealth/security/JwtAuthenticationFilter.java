@@ -33,12 +33,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         return path.equals("/api/v1/auth/login")
                 || path.equals("/api/v1/auth/refresh")   // auth endpoints
-                || path.startsWith("/ws")         // websocket endpoints
-                || path.startsWith("/v3/api-docs")
-                || path.startsWith("/swagger-ui")
-                || path.startsWith("/swagger-ui.html")
+                || path.startsWith("/ws")
+                || path.startsWith("/ws/**")         // websocket endpoints
+                || path.startsWith("/v3/api-docs/**")
+                || path.startsWith("/swagger-ui/**")
+                || path.startsWith("/swagger-ui.html/**")
                 || path.startsWith("/swagger-resources")
-                || path.startsWith("/webjars");
+                || path.equals("/api/v1/users")  // user registration endpoint
+                || path.startsWith("/webjars/**");
     }
 
     @Override
@@ -59,7 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             // Check if token is blacklisted
             if (redisService.isTokenBlacklisted(token)) {
-                log.warn("JWT_BLACKLISTED path={}", request.getRequestURI());
+                log.warn("action=jwt_auth status=FAILED reason=TOKEN_BLACKLISTED path={}", request.getRequestURI());
                 throw new JwtAuthenticationException(
                         ErrorType.JWT_BLACKLISTED,
                         "Token has been logged out"
@@ -80,7 +82,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String role = claims.get("role", String.class);
 
             if (userId == null || email == null || role == null) {
-                log.warn("JWT_INVALID_CLAIMS path={}", request.getRequestURI());
+                log.warn("action=jwt_auth status=FAILED reason=INVALID_CLAIMS path={}", request.getRequestURI());
                 throw new JwtAuthenticationException(
                         ErrorType.JWT_INVALID_TOKEN,
                         "Invalid JWT claims"
@@ -95,18 +97,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            log.debug("JWT_AUTH_SUCCESS userId={} path={}", userId, request.getRequestURI());
+            log.debug("action=jwt_auth status=SUCCESS userId={} path={}", userId, request.getRequestURI());
 
             filterChain.doFilter(request, response);
 
         } catch (JwtException ex) {
-            log.warn("JWT_INVALID path={} message={}", request.getRequestURI(), ex.getMessage());
+            log.warn("action=jwt_auth status=FAILED reason=INVALID_TOKEN path={} message={}", request.getRequestURI(), ex.getMessage());
             throw new JwtAuthenticationException(
                     ErrorType.JWT_INVALID_TOKEN,
                     "Invalid or expired token"
             );
         } catch (Exception ex) {
-            log.error("JWT_PROCESSING_ERROR path={}", request.getRequestURI(), ex);
+            log.error("action=jwt_auth status=FAILED reason=PROCESSING_ERROR path={}", request.getRequestURI(), ex);
             throw ex;
         }
     }

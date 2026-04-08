@@ -61,14 +61,14 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
                     StompPrincipal principal = new StompPrincipal(userId, email, role, token);
                     accessor.setUser(principal);
 
-                    log.debug("WS_AUTH_SUCCESS: user={} userId={}", email, userId);
+                    log.debug("action=ws_auth status=SUCCESS userId={} email={}", userId, email);
                 } catch (Exception ex) {
                     // Invalid token — reject the connection by throwing authentication exception
-                    log.warn("WS_AUTH_FAILED: invalid token during STOMP CONNECT: {}", ex.getMessage());
+                    log.warn("action=ws_auth status=FAILED reason=INVALID_TOKEN message={}", ex.getMessage());
                     throw new JwtAuthenticationException(ErrorType.JWT_INVALID_TOKEN, "Invalid or expired WebSocket token");
                 }
             } else {
-                log.warn("WS_AUTH_FAILED: missing token during STOMP CONNECT");
+                log.warn("action=ws_auth status=FAILED reason=MISSING_TOKEN");
                 throw new JwtAuthenticationException(ErrorType.JWT_INVALID_TOKEN, "WebSocket token is required");
             }
         }

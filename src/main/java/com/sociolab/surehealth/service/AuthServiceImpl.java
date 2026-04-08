@@ -2,6 +2,7 @@ package com.sociolab.surehealth.service;
 
 import com.sociolab.surehealth.dto.LoginRequest;
 import com.sociolab.surehealth.dto.LoginResponse;
+import com.sociolab.surehealth.dto.RefreshTokenResponse;
 import com.sociolab.surehealth.enums.ErrorType;
 import com.sociolab.surehealth.exception.custom.AppException;
 import com.sociolab.surehealth.logging.LogUtil;
@@ -35,14 +36,13 @@ public class AuthServiceImpl implements AuthService {
     // ================= LOGIN =================
     @Override
     public LoginResponse login(LoginRequest request) {
-
-        log.info("Login attempt for email={}", LogUtil.maskEmail(request.email()));
+        log.debug("action=auth_login status=NOOP layer=service method=login email={}", LogUtil.maskEmail(request.email()));
 
         loginRateLimiter.checkAllowed(request.email());
 
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> {
-                    log.warn("Login failed - user not found email={}", LogUtil.maskEmail(request.email()));
+                    log.warn("action=auth_login status=FAILED reason=USER_NOT_FOUND email={}", LogUtil.maskEmail(request.email()));
                     return new AppException(ErrorType.INVALID_CREDENTIALS, "Invalid email or password");
                 });
 
@@ -50,7 +50,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             loginAttemptPolicy.onFailedAttempt(user);
-            log.warn("Login failed - invalid password email={}", LogUtil.maskEmail(user.getEmail()));
+            log.warn("action=auth_login status=FAILED reason=INVALID_PASSWORD email={}", LogUtil.maskEmail(user.getEmail()));
             throw new AppException(ErrorType.INVALID_CREDENTIALS, "Invalid email or password");
         }
 
@@ -67,7 +67,7 @@ public class AuthServiceImpl implements AuthService {
                 tokenService.getRefreshExpirationSeconds()
         );
 
-        log.info("Login successful userId={} role={}", user.getId(), user.getRole());
+        log.info("action=auth_login status=SUCCESS userId={} role={}", user.getId(), user.getRole());
 
         return new LoginResponse(
                 accessToken,
@@ -80,15 +80,10 @@ public class AuthServiceImpl implements AuthService {
 
     // ================= LOGOUT =================
     @Override
-    public void logout() {
-
-        UserPrincipal principal = SecurityUtil.getCurrentUser();
-        Long userId = principal.userId();
-
-        String token = principal.accessToken();
+    public void logout(Long userId, String token) {
+        log.debug("action=auth_logout status=NOOP layer=service method=logout userId={}", userId);
 
         if (token != null) {
-
 
             // calculate remaining token expiration
             long expiry = tokenService.getRemainingExpirationSeconds(token);
@@ -99,25 +94,26 @@ public class AuthServiceImpl implements AuthService {
             // delete refresh token
             refreshTokenStore.deleteRefreshToken(userId);
 
-            log.info("User logout successful userId={}", userId);
+            log.info("action=auth_logout status=SUCCESS userId={}", userId);
 
         } else {
-            log.warn("Logout attempted without valid token");
+            log.info("action=auth_logout status=NOOP reason=NO_TOKEN");
         }
     }
 
     // ================= REFRESH TOKEN =================
     @Override
-    public Map<String, String> refreshAccessToken(String refreshToken) {
+    public RefreshTokenResponse refreshAccessToken(String refreshToken) {
+        log.debug("action=auth_refresh status=NOOP layer=service method=refreshAccessToken");
 
         if (refreshToken == null || refreshToken.isEmpty()) {
-            log.warn("Refresh token is missing");
+            log.warn("action=auth_refresh status=FAILED reason=MISSING_REFRESH_TOKEN");
             throw new AppException(ErrorType.INVALID_CREDENTIALS, "Refresh token is required");
         }
         try {
             tokenService.validateRefreshToken(refreshToken);
         } catch (Exception e) {
-            log.warn("Invalid refresh token: {}", e.getMessage());
+            log.warn("action=auth_refresh status=FAILED reason=INVALID_REFRESH_TOKEN message={}", e.getMessage());
             throw new AppException(ErrorType.INVALID_CREDENTIALS, "Refresh token invalid or expired");
         }
         Long userId = tokenService.extractUserId(refreshToken);
@@ -128,7 +124,7 @@ public class AuthServiceImpl implements AuthService {
                 storedToken.getBytes(),
                 hashedRefreshToken.getBytes()
         )) {
-            log.warn("Invalid or expired refresh token userId={}", userId);
+            log.warn("action=auth_refresh status=FAILED userId={} reason=TOKEN_MISMATCH", userId);
             // Possible token reuse or mismatch -> revoke all tokens for safety
             refreshTokenStore.revokeAllRefreshTokens(userId);
             throw new AppException(ErrorType.INVALID_CREDENTIALS, "Refresh token invalid or expired");
@@ -148,11 +144,11 @@ public class AuthServiceImpl implements AuthService {
                 tokenService.getRefreshExpirationSeconds()
         );
 
-        log.info("Refresh token successful userId={}", userId);
+        log.info("action=auth_refresh status=SUCCESS userId={}", userId);
 
-        return Map.of(
-                "accessToken", newAccessToken,
-                "refreshToken", newRefreshToken
+        return new RefreshTokenResponse(
+                newAccessToken,
+                newRefreshToken
         );
     }
 

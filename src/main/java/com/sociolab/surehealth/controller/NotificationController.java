@@ -28,50 +28,29 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     // ================= UNREAD =================
-    @Operation(summary = "Get unread notifications", description = "Retrieve all unread notifications for the current user")
+    @Operation(summary = "Get user notifications", description = "Retrieve a paginated list of the current user's notifications, with optional filtering by read/unread status")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Unread notifications retrieved successfully")
+            @ApiResponse(responseCode = "200", description = "Notifications retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid pagination parameters"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
     })
-    @GetMapping("/unread")
-    public ResponseEntity<PagedResponse<NotificationResponse>> getUnreadNotifications(
+    @GetMapping()
+    public ResponseEntity<PagedResponse<NotificationResponse>> getNotifications(
+            @RequestParam(required = false) Boolean isRead,
             @Min(0) @RequestParam(defaultValue = "0") int page,
             @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size
     , @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        String email = userPrincipal.email();
-        String masked = LogUtil.maskEmail(email);
-        log.debug("NOTIFICATION_QUERY: unreadNotifications email={} page={} size={}",
-                masked, page, size);
+        Long userId = userPrincipal.userId();
+        log.info("action=notification_fetch status=START userId={} isRead={} page={} size={}",
+                userId, isRead, page, size);
 
         Page<NotificationResponse> response =
-                notificationService.getUnreadNotificationsForCurrentUser(email, page, size);
+                notificationService.getNotificationsForCurrentUser(userId, isRead, page, size);
 
-        log.debug("NOTIFICATION_QUERY_SUCCESS: unreadNotifications email={} resultCount={}",
-                masked, response.getNumberOfElements());
+        log.info("action=notification_fetch status=SUCCESS userId={} count={}",
+                userId, response.getNumberOfElements());
 
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
 
-    // ================= READ =================
-    @Operation(summary = "Get read notifications", description = "Retrieve all read notifications for the current user")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Read notifications retrieved successfully")
-    })
-    @GetMapping("/read")
-    public ResponseEntity<PagedResponse<NotificationResponse>> getReadNotifications(
-            @Min(0) @RequestParam(defaultValue = "0") int page,
-            @Min(1) @Max(50) @RequestParam(defaultValue = "10") int size
-    , @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        String email = userPrincipal.email();
-        String masked = LogUtil.maskEmail(email);
-        log.debug("NOTIFICATION_QUERY: readNotifications email={} page={} size={}",
-                masked, page, size);
-
-        Page<NotificationResponse> response =
-                notificationService.getReadNotificationsForCurrentUser(email, page, size);
-
-        log.debug("NOTIFICATION_QUERY_SUCCESS: readNotifications email={} resultCount={}",
-                masked, response.getNumberOfElements());
-
-        return ResponseEntity.ok(ResponseUtil.paged(response));
-    }
 }

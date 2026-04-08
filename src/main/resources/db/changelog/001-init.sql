@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT,
     message VARCHAR(255),
-    event_type VARCHAR(50),
+    new_status VARCHAR(50),
     read_status BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP,
     CONSTRAINT fk_notifications_user

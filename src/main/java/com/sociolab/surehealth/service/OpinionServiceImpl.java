@@ -28,34 +28,33 @@ public class OpinionServiceImpl implements OpinionService {
 
     @Transactional
     @Override
-    public OpinionResponse submitOpinion(Long caseId, String doctorEmail, OpinionRequest request) {
-        String maskedDoctor = LogUtil.maskEmail(doctorEmail);
-        log.info("Submitting opinion for caseId={} by doctorEmail={}", caseId, maskedDoctor);
+    public OpinionResponse submitOpinion(Long caseId, Long doctorId, OpinionRequest request) {
+        log.debug("action=opinion_submit status=NOOP layer=service method=submitOpinion caseId={} userId={}", caseId, doctorId);
 
         // 1. Fetch case
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> {
-                    log.warn("Medical case not found caseId={}", caseId);
+                    log.warn("action=opinion_submit status=FAILED caseId={} reason=CASE_NOT_FOUND", caseId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Medical case not found");
                 });
 
         // 2. Ensure case is in ACCEPTED status
         if (medicalCase.getStatus() != CaseStatus.ACCEPTED) {
-            log.warn("Case not in ACCEPTED status caseId={} currentStatus={}", caseId, medicalCase.getStatus());
+            log.warn("action=opinion_submit status=FAILED caseId={} reason=INVALID_STATUS currentStatus={}", caseId, medicalCase.getStatus());
             throw new AppException(ErrorType.INVALID_OPERATION,
                     "Opinions can only be submitted for cases in ACCEPTED status");
         }
 
         // 3. Fetch doctor
-        User doctor = userRepository.findByEmail(doctorEmail)
+        User doctor = userRepository.findById(doctorId)
                 .orElseThrow(() -> {
-                    log.warn("Doctor not found email={}", maskedDoctor);
+                    log.warn("action=opinion_submit status=FAILED userId={} reason=DOCTOR_NOT_FOUND", doctorId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Doctor not found");
                 });
 
         // 4. Verify doctor is assigned to the case
         if (!doctor.getId().equals(medicalCase.getDoctor().getId())) {
-            log.warn("Doctor not assigned to case caseId={} doctorId={}", caseId, doctor.getId());
+            log.warn("action=opinion_submit status=FAILED caseId={} userId={} reason=NOT_ASSIGNED", caseId, doctor.getId());
             throw new AppException(ErrorType.INVALID_OPERATION, "You are not assigned to review this case");
         }
 
@@ -66,12 +65,12 @@ public class OpinionServiceImpl implements OpinionService {
         opinion.setComment(request.getComment());
 
         Opinion savedOpinion = opinionRepository.save(opinion);
-        log.debug("Opinion saved opinionId={}", savedOpinion.getId());
+        log.info("action=opinion_submit status=SUCCESS opinionId={}", savedOpinion.getId());
 
         // 6. Update case status to REVIEWED
         medicalCase.setStatus(CaseStatus.REVIEWED);
         caseRepository.save(medicalCase);
-        log.info("Case status updated to REVIEWED caseId={}", caseId);
+        log.info("action=opinion_submit status=SUCCESS caseId={} newStatus=REVIEWED", caseId);
 
         // 7. Return response DTO
         return new OpinionResponse(

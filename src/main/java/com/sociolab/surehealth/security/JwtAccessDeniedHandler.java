@@ -36,7 +36,7 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
         String user = authentication != null ? authentication.getName() : "anonymous";
 
         // ✅ LOG HERE
-        log.warn("ACCESS_DENIED path={} user={} message={}",
+        log.warn("action=auth_access_denied status=FAILED path={} userId={} message={}",
                 request.getRequestURI(),
                 user,
                 ex.getMessage());

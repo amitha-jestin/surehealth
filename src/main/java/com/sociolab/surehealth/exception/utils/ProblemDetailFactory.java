@@ -9,6 +9,7 @@ import org.springframework.http.ProblemDetail;
 
 import java.net.URI;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -116,7 +117,7 @@ public class ProblemDetailFactory {
             }
             problem.setProperty("traceId", traceId);
             problem.setProperty("version", apiVersion != null ? apiVersion : "v1");
-            problem.setProperty("timestamp", OffsetDateTime.now(clock));
+            problem.setProperty("timestamp", Instant.now().toString());
             if (path != null) {
                 problem.setProperty("path", path);
             }

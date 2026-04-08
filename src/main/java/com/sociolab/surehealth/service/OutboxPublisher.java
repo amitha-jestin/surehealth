@@ -35,20 +35,26 @@ public class OutboxPublisher {
         try {
             if ("CASE_ASSIGNED".equals(event.getEventType())
                     || "CASE_ACCEPTED".equals(event.getEventType())
-                    || "CASE_REJECTED".equals(event.getEventType())) {
+                    || "CASE_REJECTED".equals(event.getEventType())
+                    || "CASE_STATUS_UPDATED".equals(event.getEventType())
+                    || "CASE_CREATED".equals(event.getEventType())
+                    || "CASE_REVIEWED".equals(event.getEventType())) {
                 CaseNotificationEvent payload = objectMapper.readValue(event.getPayload(), CaseNotificationEvent.class);
                 kafkaNotificationProducer.sendEvent(payload);
             }
 
             event.setStatus("SENT");
             event.setLastAttemptAt(LocalDateTime.now());
+            outboxEventRepository.save(event);
+
         } catch (Exception ex) {
-            log.error("Outbox publish failed eventId={} type={}", event.getId(), event.getEventType(), ex);
+            log.error("action=outbox_publish status=FAILED eventId={} eventType={}", event.getId(), event.getEventType(), ex);
             event.setAttempts(event.getAttempts() + 1);
             event.setLastAttemptAt(LocalDateTime.now());
             if (event.getAttempts() >= 5) {
                 event.setStatus("FAILED");
             }
+            outboxEventRepository.save(event);
         }
     }
 }

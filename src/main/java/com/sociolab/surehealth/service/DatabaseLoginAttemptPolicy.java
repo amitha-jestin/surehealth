@@ -25,12 +25,12 @@ public class DatabaseLoginAttemptPolicy implements LoginAttemptPolicy {
     @Override
     public void validateLoginAllowed(User user) {
         if (user.getStatus() == AccountStatus.BLOCKED) {
-            log.warn("Blocked user attempted login userId={}", user.getId());
+            log.warn("action=auth_login_attempt status=FAILED reason=BLOCKED userId={}", user.getId());
             throw new AppException(ErrorType.USER_BLOCKED, "User is blocked");
         }
 
         if (user.getStatus() != AccountStatus.ACTIVE) {
-            log.warn("Inactive user attempted login userId={} status={}",
+            log.warn("action=auth_login_attempt status=FAILED reason=INACTIVE userId={} status={}",
                     user.getId(), user.getStatus());
             throw new AppException(ErrorType.USER_PENDING, "User account is not active");
         }
@@ -41,12 +41,12 @@ public class DatabaseLoginAttemptPolicy implements LoginAttemptPolicy {
         int attempts = user.getFailedLoginAttempts() + 1;
         user.setFailedLoginAttempts(attempts);
 
-        log.warn("Failed login attempt {} for userId={}", attempts, user.getId());
+        log.warn("action=auth_login_attempt status=FAILED reason=INVALID_PASSWORD userId={} attempts={}", user.getId(), attempts);
 
         if (attempts >= maxFailedAttempts) {
             user.setStatus(AccountStatus.BLOCKED);
             user.setLockTime(LocalDateTime.now());
-            log.error("User auto-blocked due to max failed attempts userId={}", user.getId());
+            log.error("action=auth_login_attempt status=FAILED reason=AUTO_BLOCKED userId={}", user.getId());
         }
 
         userRepository.save(user);
@@ -55,7 +55,7 @@ public class DatabaseLoginAttemptPolicy implements LoginAttemptPolicy {
     @Override
     public void onSuccessfulAttempt(User user) {
         if (user.getFailedLoginAttempts() > 0 || user.getLockTime() != null) {
-            log.info("Resetting failed login attempts userId={}", user.getId());
+            log.info("action=auth_login_attempt status=SUCCESS reason=RESET userId={}", user.getId());
             user.setFailedLoginAttempts(0);
             user.setLockTime(null);
             userRepository.save(user);

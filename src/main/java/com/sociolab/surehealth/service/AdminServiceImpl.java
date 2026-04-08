@@ -33,7 +33,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public void approveDoctor(Long adminId, Long doctorId) {
-        log.info("admin_action=approve_doctor adminId={} doctorId={}" ,adminId, doctorId);
+        log.debug("action=admin_approve_doctor status=NOOP layer=service method=approveDoctor adminId={} doctorId={}", adminId, doctorId);
 
         Doctor doctor = doctorRepository.findByUserId(doctorId)
                 .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND));
@@ -41,12 +41,12 @@ public class AdminServiceImpl implements AdminService {
         AccountStatus status = doctor.getUser().getStatus();
 
         if (status == AccountStatus.ACTIVE) {
-            log.warn("admin_action_failed=approve_doctor adminId={} doctorId={} reason=ALREADY_ACTIVE", adminId, doctorId);
+            log.info("action=admin_approve_doctor status=NOOP adminId={} doctorId={} reason=ALREADY_ACTIVE", adminId, doctorId);
             throw new AppException(ErrorType.USER_ACTIVE);
         }
 
         if (status == AccountStatus.BLOCKED) {
-            log.warn("admin_action_failed=approve_doctor adminId={} doctorId={} reason=BLOCKED", adminId, doctorId);
+            log.warn("action=admin_approve_doctor status=FAILED adminId={} doctorId={} reason=BLOCKED", adminId, doctorId);
             throw new AppException(ErrorType.USER_BLOCKED);
         }
 
@@ -56,45 +56,36 @@ public class AdminServiceImpl implements AdminService {
         // Explicit save for clarity
         doctorRepository.save(doctor);
 
-        log.info("admin_action_success=approve_doctor adminId={} doctorId={}", adminId, doctorId);
+        log.info("action=admin_approve_doctor status=SUCCESS adminId={} doctorId={}", adminId, doctorId);
 
         // TODO: Add audit log entry here (adminId, action, targetId, entityType)
     }
 
-    // ================== BLOCK USER ==================
     @Override
     @Transactional
-    public void blockUser(Long adminId, Long userId) {
+    public void updateUserStatus(Long adminId, Long userId, AccountStatus targetStatus) {
         if (adminId.equals(userId)) {
-            throw new AppException(ErrorType.INVALID_OPERATION, "Admin cannot block themselves");
+            throw new AppException(ErrorType.INVALID_OPERATION, "Admin cannot change their own status");
         }
+        if (targetStatus == null) {
+            throw new AppException(ErrorType.VALIDATION_ERROR, "Target status is required");
+        }
+        log.debug("action=admin_update_user_status status=NOOP layer=service method=updateUserStatus adminId={} userId={} newStatus={}", adminId, userId, targetStatus);
 
-        log.info("admin_action=block_user adminId={} userId={}", adminId, userId);
-
-        changeUserStatus(adminId, userId, AccountStatus.BLOCKED, "block");
+        changeUserStatus(adminId, userId, targetStatus);
     }
-
-    // ================== UNBLOCK USER ==================
-    @Override
-    @Transactional
-    public void unblockUser(Long adminId, Long userId) {
-        log.info("admin_action=unblock_user adminId={} userId={}", adminId, userId);
-
-        changeUserStatus(adminId, userId, AccountStatus.ACTIVE, "unblock");
-    }
-
     // ================== GET PATIENTS ==================
     @Override
     @Transactional(readOnly = true)
     public Page<PatientSummary> getAllPatients(int page, int size) {
-        log.debug("admin_query=get_all_patients page={} size={}", page, size);
+        log.debug("action=admin_get_patients status=NOOP layer=service method=getAllPatients page={} size={}", page, size);
 
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, USER_CREATED_AT));
 
         Page<PatientSummary> result = userRepository.findByRole(Role.PATIENT, pageable)
                 .map(AdminServiceImpl::mapToPatientResponse);
 
-        log.debug("admin_query_result=get_all_patients count={}", result.getNumberOfElements());
+        log.info("action=admin_get_patients status=SUCCESS count={}", result.getNumberOfElements());
         return result;
     }
 
@@ -102,14 +93,14 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional(readOnly = true)
     public Page<DoctorResponse> getAllDoctors(int page, int size) {
-        log.debug("admin_query=get_all_doctors page={} size={}", page, size);
+        log.debug("action=admin_get_doctors status=NOOP layer=service method=getAllDoctors page={} size={}", page, size);
 
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, DOCTOR_USER_CREATED_AT));
 
         Page<DoctorResponse> result = doctorRepository.findAll(pageable)
                 .map(AdminServiceImpl::mapToDoctorResponse);
 
-        log.debug("admin_query_result=get_all_doctors count={}", result.getNumberOfElements());
+        log.info("action=admin_get_doctors status=SUCCESS count={}", result.getNumberOfElements());
         return result;
     }
 
@@ -117,22 +108,28 @@ public class AdminServiceImpl implements AdminService {
     /**
      * Generic method to change user status with concurrency safety
      */
-    private void changeUserStatus(Long adminId, Long userId, AccountStatus targetStatus, String action) {
+    private void changeUserStatus(Long adminId, Long userId, AccountStatus targetStatus) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorType.RESOURCE_NOT_FOUND));
 
+        if (user.getStatus() == targetStatus) {
+            log.info("action=admin_update_user_status status=NOOP adminId={} userId={} reason=ALREADY_{}", adminId, userId, targetStatus);
+            throw new AppException(ErrorType.INVALID_OPERATION , "User is already in the desired status");
+
+        }
+
         if (targetStatus == AccountStatus.BLOCKED) {
             if (user.getStatus() == AccountStatus.BLOCKED) {
-                log.warn("admin_action_failed={} adminId={} userId={} reason=ALREADY_BLOCKED", action, adminId, userId);
+                log.info("action=admin_update_user_status status=NOOP adminId={} userId={} reason=ALREADY_BLOCKED", adminId, userId);
                 throw new AppException(ErrorType.USER_BLOCKED);
             }
         } else if (targetStatus == AccountStatus.ACTIVE) {
             if (user.getStatus() == AccountStatus.ACTIVE) {
-                log.warn("admin_action_failed={} adminId={} userId={} reason=ALREADY_ACTIVE", action, adminId, userId);
+                log.info("action=admin_update_user_status status=NOOP adminId={} userId={} reason=ALREADY_ACTIVE", adminId, userId);
                 throw new AppException(ErrorType.USER_ACTIVE);
             }
             if (user.getStatus() != AccountStatus.BLOCKED) {
-                log.warn("admin_action_failed={} adminId={} userId={} reason=INVALID_STATUS", action, adminId, userId);
+                log.warn("action=admin_update_user_status status=FAILED adminId={} userId={} reason=INVALID_STATUS", adminId, userId);
                 throw new AppException(ErrorType.USER_INVALID_STATUS);
             }
         }
@@ -140,7 +137,7 @@ public class AdminServiceImpl implements AdminService {
         user.setStatus(targetStatus);
         userRepository.save(user);
 
-        log.info("admin_action_success={} adminId={} userId={} newStatus={}", action, adminId, userId, targetStatus);
+        log.info("action=admin_update_user_status status=SUCCESS adminId={} userId={} newStatus={}", adminId, userId, targetStatus);
         // TODO: Add audit log entry here
     }
 

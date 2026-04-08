@@ -36,19 +36,21 @@ public class KafkaNotificationConsumer {
     )
     public void consume(CaseNotificationEvent event) {
 
-        log.info("Kafka event received for userId={} eventType={}", event.getUserId(), event.getEventType());
+        log.info("action=kafka_notification_consume status=START userId={} eventType={} eventId={}",
+                event.getUserId(), event.getNewStatus(), event.getEventId());
 
         try {
             if (event.getEventId() != null && !event.getEventId().isBlank()) {
                 String key = "kafka:case-event:" + event.getEventId();
                 boolean firstTime = redisService.setIfAbsent(key, "processed", idempotencyTtlSeconds);
                 if (!firstTime) {
-                    log.warn("Duplicate Kafka event skipped eventId={} userId={}", event.getEventId(), event.getUserId());
+                    log.warn("action=kafka_notification_consume status=NOOP reason=DUPLICATE_EVENT eventId={} userId={}",
+                            event.getEventId(), event.getUserId());
                     return;
                 }
             } else {
-                log.warn("Kafka event missing eventId; processing without idempotency userId={} type={}",
-                        event.getUserId(), event.getEventType());
+                log.warn("action=kafka_notification_consume status=NOOP reason=MISSING_EVENT_ID userId={} eventType={}",
+                        event.getUserId(), event.getNewStatus());
             }
 
             // Delegate to NotificationService which handles persistence and websocket delivery
@@ -56,13 +58,16 @@ public class KafkaNotificationConsumer {
             notificationService.sendCaseNotificationSync(
                     event.getUserId(),
                     event.getMessage(),
-                    event.getEventType()
+                    event.getNewStatus()
             );
+
+            log.info("action=kafka_notification_consume status=SUCCESS userId={} eventType={} eventId={}",
+                    event.getUserId(), event.getNewStatus(), event.getEventId());
 
         } catch (Exception e) {
             // Log the failure with context
-            log.error("Failed to process Kafka event for userId={}, attempting to forward to DLT ({}). error={}",
-                    event.getUserId(), dltTopic, e.getMessage(), e);
+            log.error("action=kafka_notification_consume status=FAILED userId={} eventId={} dltTopic={} error={}",
+                    event.getUserId(), event.getEventId(), dltTopic, e.getMessage(), e);
 
             // Attempt to forward the original event to a dead-letter topic so it can be retried or inspected
             try {
@@ -71,20 +76,24 @@ public class KafkaNotificationConsumer {
                     // Wait briefly for send metadata so we can log partition info; do not block indefinitely
                     SendResult<String, CaseNotificationEvent> result = future.get(5, TimeUnit.SECONDS);
                     if (result != null && result.getRecordMetadata() != null) {
-                        log.debug("Event forwarded to DLT topic={} for userId={} partition={}",
-                                dltTopic, event.getUserId(), result.getRecordMetadata().partition());
+                        log.debug("action=kafka_notification_dlt_forward status=SUCCESS dltTopic={} userId={} eventId={} partition={}",
+                                dltTopic, event.getUserId(), event.getEventId(), result.getRecordMetadata().partition());
                     } else {
-                        log.debug("Event forwarded to DLT topic={} for userId={} (no metadata)", dltTopic, event.getUserId());
+                        log.debug("action=kafka_notification_dlt_forward status=SUCCESS dltTopic={} userId={} eventId={} metadata=NONE",
+                                dltTopic, event.getUserId(), event.getEventId());
                     }
                 } catch (TimeoutException te) {
-                    log.warn("Timed out while forwarding event to DLT={} for userId={} - send will continue asynchronously", dltTopic, event.getUserId());
+                    log.warn("action=kafka_notification_dlt_forward status=NOOP reason=TIMEOUT dltTopic={} userId={} eventId={}",
+                            dltTopic, event.getUserId(), event.getEventId());
                 } catch (Exception ex) {
-                    log.error("Failed to forward event to DLT={} for userId={} error={}", dltTopic, event.getUserId(), ex.getMessage(), ex);
+                    log.error("action=kafka_notification_dlt_forward status=FAILED dltTopic={} userId={} eventId={} error={}",
+                            dltTopic, event.getUserId(), event.getEventId(), ex.getMessage(), ex);
                 }
 
             } catch (Exception sendEx) {
                 // If we cannot forward to DLT, log the error and swallow to avoid infinite retry loops at the listener level
-                log.error("Critical: failed to send event to DLT={} for userId={} error={}", dltTopic, event.getUserId(), sendEx.getMessage(), sendEx);
+                log.error("action=kafka_notification_dlt_forward status=FAILED dltTopic={} userId={} eventId={} error={}",
+                        dltTopic, event.getUserId(), event.getEventId(), sendEx.getMessage(), sendEx);
             }
         }
     }

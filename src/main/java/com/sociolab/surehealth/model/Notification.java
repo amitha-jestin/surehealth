@@ -1,5 +1,6 @@
 package com.sociolab.surehealth.model;
 
+import com.sociolab.surehealth.enums.CaseStatus;
 import com.sociolab.surehealth.enums.NotificationEventType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -25,7 +26,7 @@ public class Notification {
     private String message;
 
     @Enumerated(EnumType.STRING)
-    private NotificationEventType eventType;
+    private CaseStatus newStatus;
 
     private boolean readStatus = false;
 

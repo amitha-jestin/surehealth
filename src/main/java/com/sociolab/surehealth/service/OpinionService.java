@@ -5,5 +5,5 @@ import com.sociolab.surehealth.dto.OpinionResponse;
 
 public interface OpinionService {
 
-    OpinionResponse submitOpinion(Long caseId, String doctorEmail, OpinionRequest request);
+    OpinionResponse submitOpinion(Long caseId, Long doctorId, OpinionRequest request);
 }

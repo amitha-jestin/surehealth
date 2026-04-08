@@ -11,4 +11,6 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     // Query by nested property (user id)
     Page<Notification> findByUser_IdAndReadStatus(Long userId, boolean readStatus, Pageable pageable);
+
+    Page<Notification> findByUser_Id(Long userId, Pageable pageable);
 }

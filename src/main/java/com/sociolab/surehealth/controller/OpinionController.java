@@ -39,14 +39,14 @@ public class OpinionController {
             @RequestBody @Valid OpinionRequest opinionRequest,
             @AuthenticationPrincipal UserPrincipal doctorPrincipal
     ) {
-        String doctorEmail = doctorPrincipal.email();
-        String masked = LogUtil.maskEmail(doctorEmail);
-        log.info("OPINION_SUBMIT_ATTEMPT: doctor={} caseId={}", masked, caseId);
 
-        OpinionResponse response = opinionService.submitOpinion(caseId, doctorEmail, opinionRequest);
+        Long doctorId = doctorPrincipal.userId();
+        log.info("action=opinion_submit status=START userId={} caseId={}", doctorId, caseId);
 
-        log.info("OPINION_SUBMIT_SUCCESS: doctor={} caseId={} opinionId={}",
-                masked, caseId, response.id());
+        OpinionResponse response = opinionService.submitOpinion(caseId, doctorId, opinionRequest);
+
+        log.info("action=opinion_submit status=SUCCESS userId={} caseId={} opinionId={}",
+                doctorId, caseId, response.id());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ResponseUtil.success(response));
     }

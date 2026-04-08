@@ -1,12 +1,13 @@
 package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.*;
-import com.sociolab.surehealth.logging.LogUtil;
 import com.sociolab.surehealth.security.UserPrincipal;
 import com.sociolab.surehealth.service.CaseService;
 import com.sociolab.surehealth.service.DocumentService;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.sociolab.surehealth.utils.ResponseUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -17,12 +18,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 import java.util.List;
 
@@ -48,13 +47,14 @@ public class CaseController {
     public ResponseEntity<BaseResponse<CaseResponse>> submitCase(
             @Valid @RequestBody CaseRequest request
     , @AuthenticationPrincipal UserPrincipal patientPrincipal) {
-        String email = patientPrincipal.email();
-        log.info("CASE_SUBMIT_ATTEMPT: patient={} ", LogUtil.maskEmail(email));
 
-        CaseResponse response = caseService.submitCase(email, request);
+        Long userId = patientPrincipal.userId();
+        log.info("action=case_submit status=START userId={}", userId);
 
-        log.info("CASE_SUBMIT_SUCCESS: patient={} caseId={}",
-                LogUtil.maskEmail(email), response.caseId());
+        CaseResponse response = caseService.submitCase(userId, request);
+
+        log.info("action=case_submit status=SUCCESS userId={} caseId={}",
+                userId, response.caseId());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ResponseUtil.success(response));
     }
@@ -72,14 +72,14 @@ public class CaseController {
             @PathVariable Long caseId,
             @RequestParam("files") @Size(max = 5) List<MultipartFile> files
     , @AuthenticationPrincipal UserPrincipal patientPrincipal) {
-        String email = patientPrincipal.email();
-        log.info("DOCUMENT_UPLOAD_ATTEMPT: patient={} caseId={} fileCount={}",
-                LogUtil.maskEmail(email), caseId, files.size());
+        Long userId = patientPrincipal.userId();
+        log.info("action=case_document_upload status=START userId={} caseId={} fileCount={}",
+                userId, caseId, files.size());
 
-        Page<DocumentResponse> response = documentService.uploadDocuments(caseId, email, files);
+        Page<DocumentResponse> response = documentService.uploadDocuments(caseId, userId, files);
 
-        log.info("DOCUMENT_UPLOAD_SUCCESS: patient={} caseId={} uploadedCount={} ",
-                LogUtil.maskEmail(email), caseId, response.getNumberOfElements());
+        log.info("action=case_document_upload status=SUCCESS userId={} caseId={} uploadedCount={}",
+                userId, caseId, response.getNumberOfElements());
 
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
@@ -98,59 +98,41 @@ public class CaseController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     , @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        String email = userPrincipal.email();
-        log.debug("CASE_DOC_QUERY: user={} caseId={} page={} size={}",
-                LogUtil.maskEmail(email), caseId, page, size);
+        Long userId = userPrincipal.userId();
+        log.info("action=case_documents_fetch status=START userId={} caseId={} page={} size={}",
+                userId, caseId, page, size);
 
-        Page<DocumentResponse> response = documentService.getDocumentsForCase(caseId, email, page, size);
+        Page<DocumentResponse> response = documentService.getDocumentsForCase(caseId, userId, page, size);
 
+        log.info("action=case_documents_fetch status=SUCCESS userId={} caseId={} count={}",
+                userId, caseId, response.getNumberOfElements());
         return ResponseEntity.ok(ResponseUtil.paged(response));
     }
 
-    // ================= ACCEPT CASE =================
-    @Operation(summary = "Accept a case", description = "Doctor accepts an assigned case")
+    // ================= UPDATE CASE STATUS =================
+    @Operation(summary = "Update case status", description = "Doctor updates the status of a case")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Case accepted successfully"),
+            @ApiResponse(responseCode = "200", description = "Case status updated successfully"),
             @ApiResponse(responseCode = "403", description = "Access denied"),
             @ApiResponse(responseCode = "404", description = "Case not found")
     })
-    @PatchMapping("/{caseId}/accept")
+    @PatchMapping("/{caseId}/status")
     @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<BaseResponse<CaseResponse>> acceptCase(
-            @PathVariable Long caseId
+    public ResponseEntity<BaseResponse<CaseResponse>> updateCaseStatus(
+            @PathVariable Long caseId,
+            @RequestBody @Valid CaseStatusUpdateRequest request
     , @AuthenticationPrincipal UserPrincipal doctorPrincipal) {
-        String email = doctorPrincipal.email();
-        log.info("CASE_ACCEPT_ATTEMPT: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
 
-        CaseResponse response = caseService.acceptCase(caseId, email);
+        Long userId = doctorPrincipal.userId();
+        log.info("action=case_status_update status=START userId={} caseId={} newStatus={}",
+                userId, caseId, request.status());
 
-        log.info("CASE_ACCEPT_SUCCESS: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
-
+        CaseResponse response = caseService.updateCaseStatus(caseId, userId, request.status());
+        log.info("action=case_status_update status=SUCCESS userId={} caseId={} newStatus={}",
+                userId, caseId, request.status());
         return ResponseEntity.ok(ResponseUtil.success(response));
+
     }
-
-    // ================= REJECT CASE =================
-    @Operation(summary = "Reject a case", description = "Doctor rejects an assigned case")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Case rejected successfully"),
-            @ApiResponse(responseCode = "403", description = "Access denied"),
-            @ApiResponse(responseCode = "404", description = "Case not found")
-    })
-    @PatchMapping("/{caseId}/reject")
-    @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<BaseResponse<CaseResponse>> rejectCase(
-            @PathVariable Long caseId
-    , @AuthenticationPrincipal UserPrincipal doctorPrincipal) {
-        String email = doctorPrincipal.email();
-        log.info("CASE_REJECT_ATTEMPT: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
-
-        CaseResponse response = caseService.rejectCase(caseId, email);
-
-        log.info("CASE_REJECT_SUCCESS: doctor={} caseId={}", LogUtil.maskEmail(email), caseId);
-
-        return ResponseEntity.ok(ResponseUtil.success(response));
-    }
-
     // ================= GET MY CASES =================
     @Operation(summary = "Get my cases", description = "Retrieve all cases for current user (patient or doctor)")
     @ApiResponses(value = {
@@ -162,11 +144,12 @@ public class CaseController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     , @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        String email = userPrincipal.email();
-        log.debug("MY_CASES_QUERY: user={} page={} size={}", LogUtil.maskEmail(email), page, size);
+        Long userId = userPrincipal.userId();
+        log.info("action=case_my_fetch status=START userId={} page={} size={}", userId, page, size);
 
-        Page<CaseResponse> pagedCases = caseService.getMyCases(email, page, size);
+        Page<CaseResponse> pagedCases = caseService.getMyCases(userId, page, size);
 
+        log.info("action=case_my_fetch status=SUCCESS userId={} count={}", userId, pagedCases.getNumberOfElements());
         return ResponseEntity.ok(ResponseUtil.paged(pagedCases));
     }
 }

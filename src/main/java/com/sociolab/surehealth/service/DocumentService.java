@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface DocumentService {
 
-    Page<DocumentResponse> uploadDocuments(Long caseId, String email, List<MultipartFile> files);
+    Page<DocumentResponse> uploadDocuments(Long caseId, Long userId, List<MultipartFile> files);
 
-    Page<DocumentResponse> getDocumentsForCase(Long caseId, String email, int page, int size);
+    Page<DocumentResponse> getDocumentsForCase(Long caseId, Long userId, int page, int size);
 }

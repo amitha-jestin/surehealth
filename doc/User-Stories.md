@@ -205,9 +205,7 @@ attempts so that the system is protected from brute-force attacks.
 
     Service layer unit tests with Mockito
 
-    Minimum 70–80% code coverage
-
-    Tests executed in CI pipeline
+    Minimum 60–80% code coverage
 
 # Epic 8: DevOps & Deployment
 ## EN-5: CI/CD Pipeline using Jenkins

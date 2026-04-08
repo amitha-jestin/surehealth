@@ -1,10 +1,10 @@
 package com.sociolab.surehealth.controller;
 
-import com.sociolab.surehealth.dto.BaseResponse;
-import com.sociolab.surehealth.dto.LoginRequest;
-import com.sociolab.surehealth.dto.LoginResponse;
-import com.sociolab.surehealth.dto.RefreshTokenRequest;
+import com.sociolab.surehealth.dto.*;
+import com.sociolab.surehealth.enums.ErrorType;
+import com.sociolab.surehealth.exception.custom.AppException;
 import com.sociolab.surehealth.logging.LogUtil;
+import com.sociolab.surehealth.security.UserPrincipal;
 import com.sociolab.surehealth.service.AuthService;
 import com.sociolab.surehealth.utils.ResponseUtil;
 import jakarta.validation.Valid;
@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,23 +36,35 @@ public class AuthController {
     public ResponseEntity<BaseResponse<LoginResponse>> login(
             @Valid @RequestBody LoginRequest request) {
 
-        log.info("AUTH_ATTEMPT: login email={}", LogUtil.maskEmail(request.email()));
+        log.info("action=auth_login status=START email={}", LogUtil.maskEmail(request.email()));
 
         LoginResponse response = authService.login(request);
 
-        log.info("AUTH_SUCCESS: login id={}", response.id());
+        log.info("action=auth_login status=SUCCESS userId={}", response.id());
 
         return ResponseEntity.ok(ResponseUtil.success(response));
     }
 
     // ================== LOGOUT ==================
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/logout")
-    public ResponseEntity<BaseResponse<Void>> logout(){
-        log.info("AUTH_ATTEMPT: logout");
+    public ResponseEntity<BaseResponse<Void>> logout(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("action=auth_logout status=START");
 
-        authService.logout();
+        if (userPrincipal == null) {
+            throw new AppException(
+                    ErrorType.UNAUTHORIZED,
+                    "User authentication required"
+            );
+        }
 
-        log.info("AUTH_SUCCESS: logout");
+
+        Long userId = userPrincipal.userId();
+        String token = userPrincipal.accessToken();
+
+        authService.logout(userId, token);
+
+        log.info("action=auth_logout status=SUCCESS userId={}", userId);
 
         return ResponseEntity.ok(ResponseUtil.successMessage("Logout successful"));
     }
@@ -62,20 +76,20 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Invalid or expired refresh token")
     })
     @PostMapping("/refresh")
-    public ResponseEntity<BaseResponse<Map<String, String>>> refreshToken(
+    public ResponseEntity<BaseResponse<RefreshTokenResponse>> refreshToken(
             @Valid @RequestBody RefreshTokenRequest request) {
 
-        log.info("AUTH_ATTEMPT: refresh token");
+        log.info("action=auth_refresh status=START");
 
         // Extract refresh token from request body
         String refreshToken = request.refreshToken();
 
         // Call service to get new tokens
-        Map<String, String> tokens = authService.refreshAccessToken(refreshToken);
+        RefreshTokenResponse refreshTokenResponse = authService.refreshAccessToken(refreshToken);
 
-        log.info("AUTH_SUCCESS: refresh token");
+        log.info("action=auth_refresh status=SUCCESS");
 
         // Return both access and refresh tokens
-        return ResponseEntity.ok(ResponseUtil.success(tokens));
+        return ResponseEntity.ok(ResponseUtil.success(refreshTokenResponse));
     }
 }

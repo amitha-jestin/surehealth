@@ -38,7 +38,7 @@ public class JwtAuthEntryPoint implements AuthenticationEntryPoint {
 
         // ✅ LOG HERE (before building response)
         log.warn(
-                "AUTH_FAILED path={} errorType={} message={}",
+                "action=auth_entrypoint status=FAILED path={} errorType={} message={}",
                 request.getRequestURI(),
                 errorType,
                 detailMessage

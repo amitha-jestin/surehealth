@@ -56,7 +56,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/ws",
                                 "/ws/**",
-                                "/api/v1/users/register/**",
+                                "/api/v1/users",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",

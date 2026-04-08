@@ -34,7 +34,7 @@ public class DefaultDocumentValidator implements DocumentValidator {
             throw new AppException(ErrorType.VALIDATION_ERROR, "Unsupported file type");
         }
 
-        log.debug("Document validated name={} size={} type={}",
+        log.debug("action=document_validate status=SUCCESS name={} size={} type={}",
                 file.getOriginalFilename(), file.getSize(), contentType);
     }
 }

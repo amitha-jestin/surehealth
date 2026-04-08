@@ -1,5 +1,6 @@
 package com.sociolab.surehealth.dto;
 
+import com.sociolab.surehealth.enums.CaseStatus;
 import com.sociolab.surehealth.enums.NotificationEventType;
 import lombok.Data;
 
@@ -10,7 +11,7 @@ public record NotificationResponse(
         Long id,
         Long userId,
         String message,
-        NotificationEventType eventType,
+        CaseStatus newStatus,
         boolean readStatus,
         LocalDateTime createdAt) {
 

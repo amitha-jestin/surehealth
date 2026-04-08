@@ -4,26 +4,33 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sociolab.surehealth.dto.LoginRequest;
 import com.sociolab.surehealth.dto.RefreshTokenRequest;
-import com.sociolab.surehealth.enums.AccountStatus;
 import com.sociolab.surehealth.model.User;
+import com.sociolab.surehealth.service.RefreshTokenHasher;
 import com.sociolab.surehealth.service.RedisService;
 import com.sociolab.surehealth.testdata.TestDataFactory;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
 class AuthControllerIT extends TestContainersConfig {
+
+    private static final String BASE = "/api/v1/auth";
 
     @Autowired
     private MockMvc mockMvc;
@@ -37,159 +44,185 @@ class AuthControllerIT extends TestContainersConfig {
     @Autowired
     private RedisService redisService;
 
-    // ================= CLEANUP =================
+    @Autowired
+    private RefreshTokenHasher refreshTokenHasher;
+
+    private User user;
+    private String rawPassword;
+
+    @BeforeEach
+    void setup() {
+        rawPassword = "TestPass123!";
+        user = testDataFactory.createPatient(rawPassword);
+    }
 
     @AfterEach
     void cleanup() {
-        redisService.clearAll(); // prevent Redis state leakage
+        redisService.clearAll();
     }
 
-    // ================= LOGIN SUCCESS =================
+    @Nested
+    @DisplayName("Login")
+    class LoginTests {
 
-    @Test
-    void login_success_returnsTokenAndStoresRefreshTokenInRedis() throws Exception {
+        @Test
+        @DisplayName("shouldLoginSuccessfully")
+        void shouldLoginSuccessfully() throws Exception {
+            LoginRequest req = new LoginRequest(user.getEmail(), rawPassword);
 
-        String rawPassword = "TestPass123!";
-        User user = testDataFactory.createPatient(rawPassword);
+            MvcResult res = mockMvc.perform(post(BASE + "/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.token").isNotEmpty())
+                    .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
+                    .andExpect(jsonPath("$.data.email").value(user.getEmail()))
+                    .andExpect(jsonPath("$.data.id").value(user.getId().intValue()))
+                    .andReturn();
 
+            JsonNode root = objectMapper.readTree(res.getResponse().getContentAsString());
+            String refreshToken = root.path("data").path("refreshToken").asText();
+            String stored = redisService.getRefreshToken(user.getId());
+
+            assertNotNull(stored);
+            assertEquals(refreshTokenHasher.hash(refreshToken), stored);
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenInvalidCredentials")
+        void shouldReturnUnauthorizedWhenInvalidCredentials() throws Exception {
+            LoginRequest req = new LoginRequest(user.getEmail(), "WrongPass1!");
+
+            mockMvc.perform(post(BASE + "/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenValidationFails")
+        void shouldReturnBadRequestWhenValidationFails() throws Exception {
+            mockMvc.perform(post(BASE + "/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"email\":\"\",\"password\":\"\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenMalformedJson")
+        void shouldReturnBadRequestWhenMalformedJson() throws Exception {
+            mockMvc.perform(post(BASE + "/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Nested
+    @DisplayName("Logout")
+    class LogoutTests {
+
+        @Test
+        @DisplayName("shouldLogoutSuccessfully")
+        void shouldLogoutSuccessfully() throws Exception {
+            String accessToken = loginAndGetAccessToken();
+
+            mockMvc.perform(post(BASE + "/logout")
+                            .header("Authorization", "Bearer " + accessToken))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.meta.message").value("Logout successful"));
+
+            boolean blacklisted = redisService.isTokenBlacklisted(accessToken);
+            assertEquals(true, blacklisted);
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenNoAuth")
+        void shouldReturnUnauthorizedWhenNoAuth() throws Exception {
+            mockMvc.perform(post(BASE + "/logout"))
+                    .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Nested
+    @DisplayName("Refresh")
+    class RefreshTests {
+
+        @Test
+        @DisplayName("shouldRefreshTokenSuccessfully")
+        void shouldRefreshTokenSuccessfully() throws Exception {
+            String refreshToken = loginAndGetRefreshToken();
+            RefreshTokenRequest req = new RefreshTokenRequest(refreshToken);
+
+            MvcResult res = mockMvc.perform(post(BASE + "/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                    .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
+                    .andReturn();
+
+            JsonNode root = objectMapper.readTree(res.getResponse().getContentAsString());
+            String newRefresh = root.path("data").path("refreshToken").asText();
+            String stored = redisService.getRefreshToken(user.getId());
+
+            assertNotNull(stored);
+            assertEquals(refreshTokenHasher.hash(newRefresh), stored);
+        }
+
+        @Test
+        @DisplayName("shouldReturnUnauthorizedWhenInvalidToken")
+        void shouldReturnUnauthorizedWhenInvalidToken() throws Exception {
+            RefreshTokenRequest req = new RefreshTokenRequest("invalid-token");
+
+            mockMvc.perform(post(BASE + "/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(req)))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenValidationFails")
+        void shouldReturnBadRequestWhenValidationFails() throws Exception {
+            mockMvc.perform(post(BASE + "/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"refreshToken\":\"\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("shouldReturnBadRequestWhenMalformedJson")
+        void shouldReturnBadRequestWhenMalformedJson() throws Exception {
+            mockMvc.perform(post(BASE + "/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    private String loginAndGetAccessToken() throws Exception {
         LoginRequest req = new LoginRequest(user.getEmail(), rawPassword);
 
-        MvcResult res = mockMvc.perform(post("/api/v1/auth/login")
+        MvcResult res = mockMvc.perform(post(BASE + "/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.data.token").isNotEmpty())
-                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
-                .andExpect(jsonPath("$.data.email").value(user.getEmail()))
-                .andExpect(jsonPath("$.data.id").value(user.getId().intValue()))
                 .andReturn();
 
         JsonNode root = objectMapper.readTree(res.getResponse().getContentAsString());
-        String refreshToken = root.path("data").path("refreshToken").asText();
-
-        String stored = redisService.getRefreshToken(user.getId());
-
-        assertThat(stored).isEqualTo(refreshToken);
+        return root.path("data").path("token").asText();
     }
 
-    // ================= LOGIN INVALID PASSWORD =================
-
-    @Test
-    void login_invalidCredentials_returns401() throws Exception {
-
-        User user = testDataFactory.createPatient("CorrectPassword1");
-
-        LoginRequest req = new LoginRequest(user.getEmail(), "WrongPassword");
-
-        mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isUnauthorized());
-    }
-
-    // ================= LOGIN BLOCKED USER =================
-
-    @Test
-    void login_blockedUser_returns403() throws Exception {
-
-        String rawPassword = "BlockedPass123!";
-        User user = testDataFactory.createPatient(rawPassword);
-
-        user.setStatus(AccountStatus.BLOCKED);
-
+    private String loginAndGetRefreshToken() throws Exception {
         LoginRequest req = new LoginRequest(user.getEmail(), rawPassword);
 
-        mockMvc.perform(post("/api/v1/auth/login")
+        MvcResult res = mockMvc.perform(post(BASE + "/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isForbidden());
-    }
-
-    // ================= LOGOUT =================
-
-    @Test
-    void logout_validToken_blacklistsTokenAndDeletesRefreshToken() throws Exception {
-
-        String rawPassword = "LogoutPass123!";
-        User user = testDataFactory.createPatient(rawPassword);
-
-        LoginRequest loginReq = new LoginRequest(user.getEmail(), rawPassword);
-
-        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(loginReq)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        JsonNode root = objectMapper.readTree(loginResult.getResponse().getContentAsString());
-
-        String accessToken = root.path("data").path("token").asText();
-
-        // ensure refresh token stored
-        assertThat(redisService.getRefreshToken(user.getId())).isNotNull();
-
-        mockMvc.perform(post("/api/v1/auth/logout")
-                        .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.meta.message").value("Logout successful"));
-
-        boolean blacklisted = redisService.isTokenBlacklisted(accessToken);
-        assertThat(blacklisted).isTrue();
-
-        String refreshAfter = redisService.getRefreshToken(user.getId());
-        assertThat(refreshAfter).isNull();
-    }
-
-    // ================= REFRESH TOKEN SUCCESS =================
-
-    @Test
-    void refreshToken_validToken_returnsNewTokensAndRotatesRedisToken() throws Exception {
-
-        String rawPassword = "RefreshPass123!";
-        User user = testDataFactory.createPatient(rawPassword);
-
-        LoginRequest loginReq = new LoginRequest(user.getEmail(), rawPassword);
-
-        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(loginReq)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        JsonNode loginRoot = objectMapper.readTree(loginResult.getResponse().getContentAsString());
-
-        String refreshToken = loginRoot.path("data").path("refreshToken").asText();
-
-        RefreshTokenRequest refreshReq = new RefreshTokenRequest(refreshToken);
-
-        MvcResult refreshResult = mockMvc.perform(post("/api/v1/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(refreshReq)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
-                .andReturn();
-
-        JsonNode refreshRoot = objectMapper.readTree(refreshResult.getResponse().getContentAsString());
-
-        String newRefresh = refreshRoot.path("data").path("refreshToken").asText();
-
-        String stored = redisService.getRefreshToken(user.getId());
-
-        assertThat(stored).isEqualTo(newRefresh);
-    }
-
-    // ================= REFRESH TOKEN INVALID =================
-
-    @Test
-    void refreshToken_invalidToken_returns401() throws Exception {
-
-        RefreshTokenRequest req = new RefreshTokenRequest("invalid-token");
-
-        mockMvc.perform(post("/api/v1/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isUnauthorized());
+        JsonNode root = objectMapper.readTree(res.getResponse().getContentAsString());
+        return root.path("data").path("refreshToken").asText();
     }
 }

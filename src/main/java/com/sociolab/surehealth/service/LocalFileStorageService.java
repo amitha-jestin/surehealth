@@ -30,9 +30,9 @@ public class LocalFileStorageService implements FileStorageService {
         try {
             Files.createDirectories(filePath.getParent());
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-            log.debug("File written to disk storedFileName={}", storedFileName);
+            log.debug("action=file_store status=SUCCESS storedFileName={}", storedFileName);
         } catch (IOException e) {
-            log.error("File upload failed fileName={} error={}", file.getOriginalFilename(), e.getMessage());
+            log.error("action=file_store status=FAILED fileName={} error={}", file.getOriginalFilename(), e.getMessage());
             throw new AppException(ErrorType.DOCUMENT_UPLOAD_FAILED, "Failed to upload document");
         }
 

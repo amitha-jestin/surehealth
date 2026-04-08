@@ -16,7 +16,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 
 @Service
@@ -34,28 +39,27 @@ public class DocumentServiceImpl implements DocumentService {
     // ================= UPLOAD DOCUMENTS =================
     @Transactional
     @Override
-    public Page<DocumentResponse> uploadDocuments(Long caseId, String email, List<MultipartFile> files) {
+    public Page<DocumentResponse> uploadDocuments(Long caseId, Long userId, List<MultipartFile> files) {
+        log.debug("action=case_document_upload status=NOOP layer=service method=uploadDocuments caseId={} userId={} fileCount={}",
+                caseId, userId, files.size());
 
         if(files.isEmpty()){
-            throw new AppException(ErrorType.RESOURCE_NOT_FOUND, "No files uploaded");
+            throw new AppException(ErrorType.VALIDATION_ERROR, "No files uploaded");
         }
-        log.info("Document upload attempt caseId={} userEmail={} fileCount={}",
-                caseId, LogUtil.maskEmail(email), files.size());
-
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> {
-                    log.warn("Upload failed - case not found caseId={}", caseId);
+                    log.warn("action=case_document_upload status=FAILED caseId={} reason=CASE_NOT_FOUND", caseId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found");
                 });
 
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("Upload failed - user not found email={}", LogUtil.maskEmail(email));
+                    log.warn("action=case_document_upload status=FAILED userId={} reason=USER_NOT_FOUND", userId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
         if (!medicalCase.getPatient().getId().equals(user.getId())) {
-            log.warn("Unauthorized document upload attempt caseId={} userId={}",
+            log.warn("action=case_document_upload status=FAILED caseId={} userId={} reason=ACCESS_DENIED",
                     caseId, user.getId());
             throw new AppException(ErrorType.ACCESS_DENIED,
                     "You are not allowed to upload documents for this case");
@@ -67,7 +71,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .map(file -> storeDocument(file, medicalCase))
                 .toList();
 
-        log.info("Documents uploaded successfully caseId={} uploadedCount={} userId={}",
+        log.info("action=case_document_upload status=SUCCESS caseId={} uploadedCount={} userId={}",
                 caseId, savedDocs.size(), user.getId());
 
         Pageable pageable = PageRequest.of(0, savedDocs.size());
@@ -78,27 +82,24 @@ public class DocumentServiceImpl implements DocumentService {
 
     // ================= GET DOCUMENTS FOR CASE =================
     @Override
-    public Page<DocumentResponse> getDocumentsForCase(Long caseId, String email, int page, int size) {
-
-        log.debug("Fetching documents caseId={} email={} page={} size={}",
-                caseId, LogUtil.maskEmail(email), page, size);
+    public Page<DocumentResponse> getDocumentsForCase(Long caseId, Long userId, int page, int size) {
 
         MedicalCase medicalCase = caseRepository.findById(caseId)
                 .orElseThrow(() -> {
-                    log.warn("Document fetch failed - case not found caseId={}", caseId);
+                    log.warn("action=case_documents_fetch status=FAILED caseId={} reason=CASE_NOT_FOUND", caseId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "Case not found");
                 });
 
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("Document fetch failed - user not found email={}", LogUtil.maskEmail(email));
+                    log.warn("action=case_documents_fetch status=FAILED userId={} reason=USER_NOT_FOUND", userId);
                     return new AppException(ErrorType.RESOURCE_NOT_FOUND, "User not found");
                 });
 
         if (!medicalCase.getPatient().getId().equals(user.getId()) &&
                 !medicalCase.getDoctor().getId().equals(user.getId())) {
 
-            log.warn("Unauthorized document access caseId={} userId={}",
+            log.warn("action=case_documents_fetch status=FAILED caseId={} userId={} reason=ACCESS_DENIED",
                     caseId, user.getId());
 
             throw new AppException(ErrorType.ACCESS_DENIED,
@@ -109,7 +110,7 @@ public class DocumentServiceImpl implements DocumentService {
         Page<MedicalDocument> documentsPage =
                 documentRepository.findByMedicalCase_Id(caseId, pageable);
 
-        log.debug("Documents fetched caseId={} totalElements={}",
+        log.info("action=case_documents_fetch status=SUCCESS caseId={} count={}",
                 caseId, documentsPage.getTotalElements());
 
         return documentsPage.map(documentMapper::toResponse);
@@ -119,6 +120,7 @@ public class DocumentServiceImpl implements DocumentService {
     private MedicalDocument storeDocument(MultipartFile file, MedicalCase medicalCase) {
         documentValidator.validate(file);
         StoredFile storedFile = fileStorageService.store(file);
+        registerRollbackCleanup(storedFile);
 
         MedicalDocument doc = new MedicalDocument();
         doc.setFileName(storedFile.originalFileName());
@@ -128,9 +130,31 @@ public class DocumentServiceImpl implements DocumentService {
 
         MedicalDocument saved = documentRepository.save(doc);
 
-        log.info("Document metadata saved documentId={} caseId={}",
+        log.info("action=case_document_upload status=SUCCESS documentId={} caseId={}",
                 saved.getId(), medicalCase.getId());
 
         return saved;
+    }
+
+    private void registerRollbackCleanup(StoredFile storedFile) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    deleteStoredFileQuietly(storedFile);
+                }
+            }
+        });
+    }
+
+    private void deleteStoredFileQuietly(StoredFile storedFile) {
+        try {
+            Files.deleteIfExists(Paths.get(storedFile.filePath()));
+        } catch (IOException ignored) {
+            log.warn("action=file_cleanup status=FAILED storedFileName={}", storedFile.fileName());
+        }
     }
 }

@@ -1,7 +1,6 @@
 package com.sociolab.surehealth.controller;
 
 import com.sociolab.surehealth.dto.BaseResponse;
-import com.sociolab.surehealth.dto.DoctorRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterResponse;
 import com.sociolab.surehealth.logging.LogUtil;
@@ -24,7 +23,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 
 @RestController
-@RequestMapping(value = "/api/v1/users/register", produces = "application/json")
+@RequestMapping(value = "/api/v1/users", produces = "application/json")
 @Validated
 @RequiredArgsConstructor
 @Slf4j
@@ -32,48 +31,27 @@ public class UserController {
 
     private final UserService userService;
 
-    // ================= REGISTER PATIENT =================
-    @Operation(summary = "Register a new patient", description = "Create a new patient account")
+// ================= REGISTER USER (PATIENT OR DOCTOR) =================
+    @Operation(summary = "Register a new user (patient or doctor)", description = "Create a new user account. Role is determined by the 'role' field in the request")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Patient registered successfully"),
+            @ApiResponse(responseCode = "201", description = "User registered successfully"),
             @ApiResponse(responseCode = "400", description = "Email already exists or validation error")
     })
-    @PostMapping("/patient")
-    public ResponseEntity<BaseResponse<UserRegisterResponse>> registerPatient(
+    @PostMapping
+    public ResponseEntity<BaseResponse<UserRegisterResponse>> registerUser(
             @Valid @RequestBody UserRegisterRequest request
     ) {
-        log.info("USER_REGISTER_ATTEMPT: role=PATIENT email={}", LogUtil.maskEmail(request.getEmail()));
+        log.info("action=user_register status=START role={} email={}", request.getRole(), LogUtil.maskEmail(request.getEmail()));
 
-        UserRegisterResponse patient = userService.registerPatient(request);
+        UserRegisterResponse user = userService.registerUser(request);
 
-        URI location = createLocation(patient);
+        URI location = createLocation(user);
 
-        log.info("USER_REGISTER_SUCCESS: role=PATIENT id={}", patient.id());
+        log.info("action=user_register status=SUCCESS role={} userId={}", user.role(), user.id());
 
-        return ResponseEntity.created(location).body(ResponseUtil.success(patient));
+        return ResponseEntity.created(location).body(ResponseUtil.success(user));
     }
 
-    // ================= REGISTER DOCTOR =================
-    @Operation(summary = "Register a new doctor", description = "Create a new doctor account (pending admin approval)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Doctor registered successfully, pending approval"),
-            @ApiResponse(responseCode = "400", description = "Email or license already exists or validation error")
-    })
-    @PostMapping("/doctor")
-    public ResponseEntity<BaseResponse<UserRegisterResponse>> registerDoctor(
-            @Valid @RequestBody DoctorRegisterRequest request
-    ) {
-        log.info("USER_REGISTER_ATTEMPT: role=DOCTOR email={}", LogUtil.maskEmail(request.getEmail()));
-
-        UserRegisterResponse doctor = userService.registerDoctor(request);
-
-        URI location = createLocation(doctor);
-
-        log.info("USER_REGISTER_SUCCESS: role=DOCTOR id={}",
-                 doctor.id());
-
-        return ResponseEntity.created(location).body(ResponseUtil.success(doctor));
-    }
 
     private URI createLocation(UserRegisterResponse user) {
         return ServletUriComponentsBuilder

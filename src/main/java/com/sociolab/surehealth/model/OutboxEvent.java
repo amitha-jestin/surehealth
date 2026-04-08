@@ -21,8 +21,8 @@ public class OutboxEvent {
     @Column(nullable = false)
     private String eventType;
 
-    @Lob
-    @Column(nullable = false)
+
+    @Column(nullable = false , columnDefinition = "TEXT")
     private String payload;
 
     @Column(nullable = false)

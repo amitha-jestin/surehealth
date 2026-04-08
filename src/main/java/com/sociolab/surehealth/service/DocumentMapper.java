@@ -12,7 +12,7 @@ public class DocumentMapper {
                 doc.getId(),
                 doc.getFileName(),
                 doc.getFileType(),
-                doc.getFilePath(),
+                doc.getFileName(),
                 doc.getMedicalCase().getId(),
                 doc.getUploadedAt()
         );

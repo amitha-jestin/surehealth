@@ -1,6 +1,5 @@
 package com.sociolab.surehealth.service;
 
-import com.sociolab.surehealth.dto.DoctorRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterRequest;
 import com.sociolab.surehealth.dto.UserRegisterResponse;
 import com.sociolab.surehealth.enums.AccountStatus;
@@ -29,69 +28,76 @@ public class UserServiceImpl implements UserService {
     private final DoctorRepository doctorRepository;
 
     /**
-     * Register a new patient
+     * Register a new user (patient or doctor based on role)
      */
+    @Transactional
     @Override
-    public UserRegisterResponse registerPatient(UserRegisterRequest req) {
-        log.info("Registering new patient email={} ", LogUtil.maskEmail(req.getEmail()));
+    public UserRegisterResponse registerUser(UserRegisterRequest request) {
+        log.debug("action=user_register status=NOOP layer=service method=registerUser role={}", request.getRole());
 
         try {
-            User user = new User();
-            user.setName(req.getName());
-            user.setEmail(req.getEmail());
-            user.setRole(Role.PATIENT);
-            user.setStatus(AccountStatus.ACTIVE);
-            user.setPassword(passwordEncoder.encode(req.getPassword()));
+            // Step 1: Create base user
+            User user = createBaseUser(request);
 
             User savedUser = userRepository.save(user);
-            log.info("Patient registered successfully userId={} ", savedUser.getId());
 
-            return mapToUserRegisterResponse(savedUser, "Patient registered successfully");
+            // Step 2: Role-specific logic
+            switch (request.getRole()) {
+                case PATIENT -> {
+                    log.info("action=user_register status=SUCCESS userId={} role=PATIENT", savedUser.getId());
+                    return mapToUserRegisterResponse(savedUser, "Patient registered successfully");
+                }
+
+                case DOCTOR -> {
+                    createDoctorProfile(request, savedUser);
+
+                    log.info("action=user_register status=SUCCESS userId={} role=PENDING_DOCTOR", savedUser.getId());
+                    return mapToUserRegisterResponse(savedUser,
+                            "Doctor registered successfully. Awaiting admin approval");
+                }
+
+                default -> throw new AppException(ErrorType.INVALID_REQUEST, "Invalid role");
+            }
 
         } catch (DataIntegrityViolationException e) {
-            log.warn("Duplicate patient registration attempt");
+            log.warn("action=user_register status=FAILED reason=DUPLICATE email={}", LogUtil.maskEmail(request.getEmail()));
             throw new AppException(ErrorType.DUPLICATE_RESOURCE, "Email already exists");
         }
     }
 
-    /**
-     * Register a new doctor
-     */
-    @Transactional
-    @Override
-    public UserRegisterResponse registerDoctor(DoctorRegisterRequest req) {
-        log.info("Registering new doctor email={}",
-                LogUtil.maskEmail(req.getEmail()));
+    // ================= HELPER METHODS =================
 
-        try {
-            // Create User entity
-            User user = new User();
-            user.setName(req.getName());
-            user.setEmail(req.getEmail());
+    private User createBaseUser(UserRegisterRequest req) {
+        User user = new User();
+
+        user.setName(req.getName());
+        user.setEmail(req.getEmail());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+
+        if (req.getRole() == Role.DOCTOR) {
             user.setRole(Role.PENDING_DOCTOR);
             user.setStatus(AccountStatus.PENDING);
-            user.setPassword(passwordEncoder.encode(req.getPassword()));
-
-            User savedUser = userRepository.save(user);
-            log.info("User entry for doctor created userId={}", savedUser.getId());
-
-            // Create Doctor entity
-            Doctor doctor = new Doctor();
-            doctor.setUser(savedUser);
-            doctor.setLicenseNumber(req.getLicenseNumber());
-            doctor.setSpeciality(req.getSpeciality());
-            doctor.setExperienceYears(req.getExperienceYears());
-            doctor.setVerified(false);
-
-            doctorRepository.save(doctor);
-            log.info("Doctor registered successfully doctorId={}", doctor.getUser().getId());
-
-            return mapToUserRegisterResponse(savedUser, "Doctor registered successfully. Awaiting admin approval");
-
-        } catch (DataIntegrityViolationException e) {
-            log.warn("Duplicate doctor registration attempt");
-            throw new AppException(ErrorType.DUPLICATE_RESOURCE, "Email or license number already exists");
+        } else {
+            user.setRole(Role.PATIENT);
+            user.setStatus(AccountStatus.ACTIVE);
         }
+
+        return user;
+    }
+
+    private void createDoctorProfile(UserRegisterRequest req, User user) {
+
+        // Validation for doctor-specific fields
+        validateDoctorFields(req);
+
+        Doctor doctor = new Doctor();
+        doctor.setUser(user);
+        doctor.setLicenseNumber(req.getLicenseNumber());
+        doctor.setSpeciality(req.getSpeciality());
+        doctor.setExperienceYears(req.getExperienceYears());
+        doctor.setVerified(false);
+
+        doctorRepository.save(doctor);
     }
 
 
@@ -106,5 +112,20 @@ public class UserServiceImpl implements UserService {
                 user.getRole().name(),
                 message
         );
+    }
+
+    private void validateDoctorFields(UserRegisterRequest req) {
+        if (req.getLicenseNumber() == null || req.getLicenseNumber().isBlank()) {
+            throw new AppException(ErrorType.VALIDATION_ERROR, "License number is required");
+        }
+
+        if (req.getSpeciality() == null) {
+            throw new AppException(ErrorType.VALIDATION_ERROR, "Speciality is required");
+        }
+
+        if (req.getExperienceYears() == null || req.getExperienceYears() < 0) {
+            throw new AppException(ErrorType.VALIDATION_ERROR, "Valid experience is required");
+        }
+
     }
 }
