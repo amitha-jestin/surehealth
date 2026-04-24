@@ -205,10 +205,10 @@ attempts so that the system is protected from brute-force attacks.
 
     Service layer unit tests with Mockito
 
-    Minimum 60–80% code coverage
+    Minimum 60–8mvn help:all-profiles0% code coverage
 
 # Epic 8: DevOps & Deployment
-## EN-5: CI/CD Pipeline using Jenkins
+## EN-5: CI/CD Pipeline using github actions
 
 **As a DevOps engineer**, I want to create a Jenkins pipeline so that code is automatically built, tested, and packaged.
 

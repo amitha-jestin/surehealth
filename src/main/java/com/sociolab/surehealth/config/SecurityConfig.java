@@ -61,7 +61,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-resources/**",
-                                "/webjars/**"
+                                "/webjars/**",
+                                "/actuator/health",
+                                "/actuator/info"
                         ).permitAll()
                         .requestMatchers("/api/v1/patient/**").hasRole("PATIENT")
                         .requestMatchers("/api/v1/doctor/**").hasRole("DOCTOR")

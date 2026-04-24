@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Java
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # 3. Build + Test
+      - name: Build and test
+        run: mvn -B clean verify
+
+      # 4. Upload test reports
+      - name: Upload JUnit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-reports
+          path: target/surefire-reports
+        if-no-files-found: warn
+
+      # 5. Upload coverage report
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco
+        if-no-files-found: warn
+
+      # 6. Verify build artifact
+      - name: Verify JAR exists
+        run: ls target/*.jar >/dev/null 2>&1 || (echo "JAR not found" && exit 1)
+
+      # 7. Build Docker image (CI only)
+      - name: Build Docker image
+        run: docker build -t surehealth:ci .
+
+      # 8. Smoke test container
+      - name: Smoke test container
+        run: |
+          set -e
+
+          echo "Starting container..."
+          docker run -d --rm -p 8080:8080 --name surehealth_smoke surehealth:ci
+
+          echo "Waiting for health check..."
+          for i in {1..20}; do
+            if curl -fsS http://localhost:8080/actuator/health >/dev/null; then
+              echo "Smoke test passed"
+              docker stop surehealth_smoke
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "Smoke test failed"
+          docker logs surehealth_smoke || true
+          docker stop surehealth_smoke
+          exit 1
